@@ -1,0 +1,167 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+// === ENUMS (Regras de Negócio) ===
+
+enum Role {
+    SUPER_ADMIN
+    SECRETARIA
+    VEREADOR
+    ASSESSOR
+}
+
+enum DocumentType {
+    INDICACAO
+    REQUERIMENTO
+    PROJETO_LEI
+    OFICIO
+    MOCAO
+    PARECER // Novo
+    EMENDA_ADITIVA // Novo
+    EMENDA_IMPOSITIVA // Novo
+}
+
+enum DocumentStatus {
+    RASCUNHO
+    ENVIADO
+    REFAZER
+    CANCELADO
+    APROVADO
+}
+
+// === TABELAS ===
+
+model Tenant {
+    id              String   @id @default(uuid())
+    name            String
+    slug            String   @unique
+    isActive        Boolean  @default(true) // Super Admin usa para bloquear/liberar
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+    // Configurações Globais para Documentos Oficiais
+    prefeitoNome    String? // Ex: "Maria Divanize Alves de Oliveira"
+    palacioNome     String? // Ex: "Manoel Alves Bezerra"
+    salaSessoesNome String? // Ex: "Vereador José Fernandes de Queiroz"
+    cidadeEstado    String? // Ex: "Baraúna-RN"
+    artigoIndicacao String? // Ex: "artigo 103, Parágrafo 1º do Regimento Interno"
+
+    logoCabecalho String? @db.Text
+    marcaDagua    String? @db.Text
+
+    enderecoRodape String? // Ex: Rua do Horto Florestal, 506 Centro, Baraúna-RN // CEP: 59.695-000
+    contatoRodape  String? // Ex: http://barauna.rn.leg.br/ // cmb.barauna@gmail.com
+
+    users              User[]
+    gabinetes          Gabinete[]
+    documents          Document[]
+    secretariaDestinos SecretariaDestino[]
+    sessoes            Sessao[]
+}
+
+model Gabinete {
+    id        String   @id @default(uuid())
+    name      String // Ex: "Gabinete do Vereador João"
+    isActive  Boolean  @default(true)
+    tenantId  String
+    tenant    Tenant   @relation(fields: [tenantId], references: [id])
+    createdAt DateTime @default(now())
+
+    users     User[]
+    documents Document[]
+}
+
+model User {
+    id       String  @id @default(uuid())
+    email    String  @unique
+    password String
+    name     String
+    role     Role    @default(ASSESSOR)
+    isActive Boolean @default(true) // Secretaria usa para bloquear acessos
+
+    tenantId String
+    tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+    gabineteId String? // Secretaria e Super Admin não têm gabinete, apenas Vereador/Assessor
+    gabinete   Gabinete? @relation(fields: [gabineteId], references: [id])
+    partido    String?
+    createdAt  DateTime  @default(now())
+    updatedAt  DateTime  @updatedAt
+
+    documents Document[] // Documentos criados por este usuário específico
+}
+
+model Document {
+    id          String         @id @default(uuid())
+    protocolNum Int
+    year        Int
+    type        DocumentType
+    status      DocumentStatus @default(RASCUNHO)
+
+    // Campos Gerais
+    ementa  String
+    content String @db.Text
+
+    // Campos Específicos para Indicações
+    motivo            String? @db.Text
+    secretariaDestino String?
+    nomeSecretario    String?
+    justificativa     String? @db.Text
+
+    // Observações da Secretaria (quando manda refazer ou cancela)
+    feedbackSecretaria String? @db.Text
+
+    tenantId String
+    tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+    gabineteId String?
+    gabinete   Gabinete? @relation(fields: [gabineteId], references: [id])
+
+    authorId String
+    author   User   @relation(fields: [authorId], references: [id])
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    sessaoId  String?
+    sessao    Sessao?  @relation(fields: [sessaoId], references: [id])
+
+    @@unique([tenantId, type, protocolNum, year])
+    @@index([tenantId])
+}
+
+model SecretariaDestino {
+    id       String  @id @default(uuid())
+    nome     String // Ex: "Secretaria Municipal de Obras"
+    titular  String? // Ex: "João Silva"
+    isActive Boolean @default(true)
+
+    tenantId String
+    tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+    createdAt DateTime @default(now())
+
+    @@index([tenantId])
+}
+
+model Sessao {
+    id         String   @id @default(uuid())
+    numero     Int // Ex: 32 (32ª Sessão)
+    tipo       String // Ex: "Ordinária" ou "Extraordinária"
+    dataSessao DateTime // Data em que a sessão vai ocorrer
+    status     String   @default("ABERTA") // ABERTA (A receber documentos) ou FECHADA (Pronta para o plenário)
+
+    tenantId String
+    tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+    documents Document[] // Documentos que entraram na pauta desta sessão
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([tenantId])
+}
