@@ -42,7 +42,7 @@ export default function MeusDocumentos() {
 
   const carregarDocumentos = async (gabineteId: string) => {
     try {
-      const res = await fetch(``${process.env.NEXT_PUBLIC_API_URL}/document/gabinete/${gabineteId}`);
+      const res = await fetch(${`process.env.NEXT_PUBLIC_API_URL}/document/gabinete/${gabineteId}`);
       const data = await res.json();
       setDocumentos(data);
     } catch (error) {
