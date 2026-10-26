@@ -47,7 +47,6 @@ export default function GestaoGabinetes() {
     }
   };
 
-  // Função para Inativar/Reativar
   const handleToggleStatus = async (id: string, currentStatus: boolean) => {
     try {
       await fetch(`${process.env.NEXT_PUBLIC_API_URL}/gabinete/${id}/status`, {
@@ -55,7 +54,7 @@ export default function GestaoGabinetes() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: !currentStatus }),
       });
-      carregarGabinetes(user.tenantId); // Atualiza a lista para refletir a mudança
+      carregarGabinetes(user.tenantId);
     } catch (error) {
       console.error("Erro ao alterar status", error);
     }
