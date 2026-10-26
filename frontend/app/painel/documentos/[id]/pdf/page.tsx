@@ -44,26 +44,22 @@ export default function DocumentoPDF({ params }: { params: Promise<{ id: string 
   const nomeCidade = tenant?.cidadeEstado ? tenant.cidadeEstado.split('-')[0] : "Baraúna";
 
   return (
-    <div className="min-h-screen bg-gray-200 py-8 flex flex-col items-center print:p-0 print:bg-white">
+    <div className="min-h-screen bg-gray-200 py-8 flex flex-col items-center print:py-0 print:p-0 print:m-0 print:bg-white print:block">
       
       {/* CSS Global para Impressão e Repetição de Assinatura/Rodapé por Página */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
           @page { 
-            margin: 15mm; 
+            margin: 0; /* Zera a margem para remover cabeçalhos/rodapés do navegador */
             size: A4;
-            @bottom-left {
-              content: "Palácio ${tenant?.palacioNome || ''} | Visto/Assinatura: ___________________________";
-              font-family: serif;
-              font-size: 10px;
-            }
-            @bottom-right {
-              content: "Pág. " counter(page) " de " counter(pages);
-              font-family: serif;
-              font-size: 10px;
-            }
           }
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: white; }
+          body { 
+            margin: 0; 
+            padding: 0; 
+            -webkit-print-color-adjust: exact; 
+            print-color-adjust: exact; 
+            background: white; 
+          }
           .no-print { display: none !important; }
           
           .watermark-print {
@@ -92,7 +88,7 @@ export default function DocumentoPDF({ params }: { params: Promise<{ id: string 
         </button>
       </div>
 
-      <div className="w-[210mm] min-h-[297mm] bg-white relative shadow-2xl print:shadow-none print:w-full print:h-auto font-serif text-[15px] leading-relaxed text-black block">
+      <div className="w-[210mm] min-h-[297mm] bg-white relative shadow-2xl print:shadow-none print:w-full print:max-w-none print:h-auto print:m-0 font-serif text-[15px] leading-relaxed text-black block box-border">
         
         {tenant?.marcaDagua && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 opacity-10 watermark-print">
@@ -100,7 +96,8 @@ export default function DocumentoPDF({ params }: { params: Promise<{ id: string 
           </div>
         )}
 
-        <div className="px-[15mm] py-[15mm] relative z-10">
+        {/* Margem interna do documento de 10mm (evita cortes da impressora física) */}
+        <div className="px-[15mm] py-[15mm] print:px-[10mm] print:py-[10mm] relative z-10 box-border">
           
           {/* CABEÇALHO DIVIDIDO */}
           <div className="flex items-center justify-between mb-6">
