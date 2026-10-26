@@ -19,11 +19,11 @@ export default function DocumentoPDF({ params }: { params: Promise<{ id: string 
 
   const carregarDados = async (id: string) => {
     try {
-      const resDoc = await fetch(`http://localhost:4000/document/detalhe/${id}`);
+      const resDoc = await fetch(``${process.env.NEXT_PUBLIC_API_URL}/document/detalhe/${id}`);
       const dataDoc = await resDoc.json();
       setDoc(dataDoc);
 
-      const resTenant = await fetch(`http://localhost:4000/tenant/${dataDoc.tenantId}`);
+      const resTenant = await fetch(``${process.env.NEXT_PUBLIC_API_URL}/tenant/${dataDoc.tenantId}`);
       const dataTenant = await resTenant.json();
       setTenant(dataTenant);
     } catch (error) {

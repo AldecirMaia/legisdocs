@@ -56,7 +56,7 @@ export default function SuperAdminDashboard() {
 
   const carregarTenants = async () => {
     try {
-      const res = await fetch(`http://localhost:4000/super-admin/tenants`);
+      const res = await fetch(``${process.env.NEXT_PUBLIC_API_URL}/super-admin/tenants`);
       if (res.ok) setTenants(await res.json());
     } catch (error) {
       showToast("Erro ao carregar câmaras", "error");
@@ -67,7 +67,7 @@ export default function SuperAdminDashboard() {
 
   const carregarUsuariosDoTenant = async (tenantId: string) => {
     try {
-      const res = await fetch(`http://localhost:4000/super-admin/tenants/${tenantId}/users`);
+      const res = await fetch(``${process.env.NEXT_PUBLIC_API_URL}/super-admin/tenants/${tenantId}/users`);
       if (res.ok) setTenantUsers(await res.json());
     } catch (error) {
       showToast("Erro ao carregar utilizadores", "error");
@@ -82,7 +82,7 @@ export default function SuperAdminDashboard() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch(`http://localhost:4000/super-admin/tenants`, {
+      const res = await fetch(``${process.env.NEXT_PUBLIC_API_URL}/super-admin/tenants`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(createForm),
       });
       if (!res.ok) throw new Error();
@@ -97,7 +97,7 @@ export default function SuperAdminDashboard() {
     e.preventDefault();
     if (!editTenant) return;
     try {
-      const res = await fetch(`http://localhost:4000/super-admin/tenants/${editTenant.id}`, {
+      const res = await fetch(``${process.env.NEXT_PUBLIC_API_URL}/super-admin/tenants/${editTenant.id}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editForm),
       });
       if (!res.ok) throw new Error();
@@ -110,7 +110,7 @@ export default function SuperAdminDashboard() {
   const executeToggleStatus = async () => {
     if (!confirmStatus) return;
     try {
-      const res = await fetch(`http://localhost:4000/super-admin/tenants/${confirmStatus.id}/status`, {
+      const res = await fetch(``${process.env.NEXT_PUBLIC_API_URL}/super-admin/tenants/${confirmStatus.id}/status`, {
         method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isActive: !confirmStatus.isActive }),
       });
       if (!res.ok) throw new Error();
@@ -123,7 +123,7 @@ export default function SuperAdminDashboard() {
   const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
     if (!confirm(`Deseja ${currentStatus ? 'BLOQUEAR' : 'LIBERAR'} este utilizador?`)) return;
     try {
-      const res = await fetch(`http://localhost:4000/super-admin/users/${userId}/status`, {
+      const res = await fetch(``${process.env.NEXT_PUBLIC_API_URL}/super-admin/users/${userId}/status`, {
         method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isActive: !currentStatus }),
       });
       if (!res.ok) throw new Error();
@@ -136,7 +136,7 @@ export default function SuperAdminDashboard() {
     e.preventDefault();
     if (!passwordUser) return;
     try {
-      const res = await fetch(`http://localhost:4000/super-admin/users/${passwordUser.id}/password`, {
+      const res = await fetch(``${process.env.NEXT_PUBLIC_API_URL}/super-admin/users/${passwordUser.id}/password`, {
         method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ newPassword }),
       });
       if (!res.ok) throw new Error();

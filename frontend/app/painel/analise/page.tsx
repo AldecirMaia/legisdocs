@@ -25,7 +25,7 @@ export default function FilaDeAnalise() {
 
   const carregarFila = async (tenantId: string) => {
     try {
-      const res = await fetch(`http://localhost:4000/document/fila/${tenantId}`);
+      const res = await fetch(``${process.env.NEXT_PUBLIC_API_URL}/document/fila/${tenantId}`);
       const data = await res.json();
       setDocumentos(data);
     } catch (error) {

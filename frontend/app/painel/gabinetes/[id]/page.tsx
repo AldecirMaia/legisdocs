@@ -28,7 +28,7 @@ export default function MembrosGabinete({ params }: { params: Promise<{ id: stri
 
   const carregarMembros = async (id: string) => {
     try {
-      const res = await fetch(`http://localhost:4000/user/gabinete/${id}`);
+      const res = await fetch(``${process.env.NEXT_PUBLIC_API_URL}/user/gabinete/${id}`);
       const data = await res.json();
       setMembros(data);
     } catch (error) {
@@ -42,7 +42,7 @@ export default function MembrosGabinete({ params }: { params: Promise<{ id: stri
     setErrorMsg("");
     
     try {
-      const res = await fetch("http://localhost:4000/user/create", {
+      const res = await fetch("`${process.env.NEXT_PUBLIC_API_URL}/user/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 

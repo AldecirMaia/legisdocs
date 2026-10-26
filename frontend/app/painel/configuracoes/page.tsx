@@ -29,7 +29,7 @@ export default function ConfiguracoesCamara() {
 
   const carregarConfiguracoes = async (tenantId: string) => {
     try {
-      const res = await fetch(`http://localhost:4000/tenant/${tenantId}`);
+      const res = await fetch(``${process.env.NEXT_PUBLIC_API_URL}/tenant/${tenantId}`);
       if (!res.ok) throw new Error("Erro ao carregar configurações");
       const data = await res.json();
       setForm({
@@ -73,7 +73,7 @@ export default function ConfiguracoesCamara() {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await fetch(`http://localhost:4000/tenant/${user.tenantId}/settings`, {
+      const res = await fetch(``${process.env.NEXT_PUBLIC_API_URL}/tenant/${user.tenantId}/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),

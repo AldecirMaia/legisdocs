@@ -48,7 +48,7 @@ export default function NovoDocumento() {
 
   const carregarSecretarias = async (tenantId: string) => {
     try {
-      const res = await fetch(`http://localhost:4000/secretaria-destino/list/active/${tenantId}`);
+      const res = await fetch(``${process.env.NEXT_PUBLIC_API_URL}/secretaria-destino/list/active/${tenantId}`);
       const data = await res.json();
       setSecretarias(data);
     } catch (error) {
@@ -103,7 +103,7 @@ export default function NovoDocumento() {
     };
 
     try {
-      const res = await fetch("http://localhost:4000/document/create", {
+      const res = await fetch("`${process.env.NEXT_PUBLIC_API_URL}/document/create", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();

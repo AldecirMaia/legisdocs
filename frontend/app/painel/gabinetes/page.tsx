@@ -19,7 +19,7 @@ export default function GestaoGabinetes() {
 
   const carregarGabinetes = async (tenantId: string) => {
     try {
-      const res = await fetch(`http://localhost:4000/gabinete/list/${tenantId}`);
+      const res = await fetch(``${process.env.NEXT_PUBLIC_API_URL}/gabinete/list/${tenantId}`);
       const data = await res.json();
       setGabinetes(data);
     } catch (error) {
@@ -33,7 +33,7 @@ export default function GestaoGabinetes() {
     setLoading(true);
 
     try {
-      await fetch("http://localhost:4000/gabinete/create", {
+      await fetch("`${process.env.NEXT_PUBLIC_API_URL}/gabinete/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: nomeGabinete, tenantId: user.tenantId }),
@@ -50,7 +50,7 @@ export default function GestaoGabinetes() {
   // Função para Inativar/Reativar
   const handleToggleStatus = async (id: string, currentStatus: boolean) => {
     try {
-      await fetch(`http://localhost:4000/gabinete/${id}/status`, {
+      await fetch(``${process.env.NEXT_PUBLIC_API_URL}/gabinete/${id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: !currentStatus }),
