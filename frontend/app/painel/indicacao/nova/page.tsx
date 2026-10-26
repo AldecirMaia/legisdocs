@@ -6,10 +6,27 @@ import "react-quill-new/dist/quill.snow.css";
 
 const ReactQuill = dynamic(() => import("react-quill-new"), { ssr: false });
 
+// Interfaces TypeScript para evitar o uso de "any"
+interface UserAuth {
+  id: string;
+  name: string;
+  role: string;
+  tenantId: string;
+  gabineteId: string;
+  [key: string]: unknown;
+}
+
+interface Secretaria {
+  id: string;
+  nome: string;
+  titular: string;
+  [key: string]: unknown;
+}
+
 export default function NovoDocumento() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [secretarias, setSecretarias] = useState<any[]>([]);
+  const [user, setUser] = useState<UserAuth | null>(null);
+  const [secretarias, setSecretarias] = useState<Secretaria[]>([]);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" | "info" } | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -32,7 +49,8 @@ export default function NovoDocumento() {
   const carregarSecretarias = async (tenantId: string) => {
     try {
       const res = await fetch(`http://localhost:4000/secretaria-destino/list/active/${tenantId}`);
-      setSecretarias(await res.json());
+      const data = await res.json();
+      setSecretarias(data);
     } catch (error) {
       console.error(error);
     }
@@ -74,6 +92,7 @@ export default function NovoDocumento() {
 
   const handleSubmit = async (status: "RASCUNHO" | "ENVIADO") => {
     if (!ementa.trim()) return showToast("O campo inicial é obrigatório.", "error");
+    if (!user) return;
     setLoading(true);
 
     const payload = {
@@ -117,9 +136,16 @@ export default function NovoDocumento() {
             <p className="text-blue-700 text-sm mt-1">Pode colar tabelas do Word diretamente no editor abaixo. Use o botão <strong>Tx</strong> no editor para limpar formatações coladas com erros.</p>
           </div>
           <div className="p-6 sm:p-8 space-y-6">
+            
+            {/* TIPO DE DOCUMENTO */}
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">Tipo de Documento</label>
-              <select value={tipo} onChange={(e) => setTipo(e.target.value)} className="w-full border border-gray-300 rounded-lg p-3 font-semibold bg-gray-50">
+              <select 
+                value={tipo} 
+                onChange={(e) => setTipo(e.target.value)} 
+                // text-gray-900 aplicado para forçar texto preto no select
+                className="w-full border border-gray-300 rounded-lg p-3 font-semibold bg-gray-50 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              >
                 <option value="INDICACAO">Indicação Parlamentar</option>
                 <option value="OFICIO">Ofício</option>
                 <option value="PROJETO_LEI">Projeto de Lei</option>
@@ -129,16 +155,32 @@ export default function NovoDocumento() {
                 <option value="EMENDA_IMPOSITIVA">Emenda Parlamentar Impositiva</option>
               </select>
             </div>
+            
             <hr className="border-gray-200" />
+            
+            {/* EMENTA */}
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">{labels.ementa}</label>
-              <textarea rows={2} required value={ementa} onChange={(e) => setEmenta(e.target.value)} placeholder={labels.placeholderEmenta} className="w-full border border-gray-300 rounded-lg p-3" />
+              <textarea 
+                rows={2} 
+                required 
+                value={ementa} 
+                onChange={(e) => setEmenta(e.target.value)} 
+                placeholder={labels.placeholderEmenta} 
+                // text-gray-900 aplicado para forçar texto preto na textarea
+                className="w-full border border-gray-300 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none placeholder-gray-400" 
+              />
             </div>
             
+            {/* SECRETARIA */}
             {mostrarSecretaria && (
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                 <label className="block text-sm font-bold text-gray-700 mb-2">Secretaria / Órgão</label>
-                <select value={secretariaSelecionada} onChange={(e) => setSecretariaSelecionada(e.target.value)} className="w-full border border-gray-300 rounded-lg p-3 mb-4">
+                <select 
+                  value={secretariaSelecionada} 
+                  onChange={(e) => setSecretariaSelecionada(e.target.value)} 
+                  className="w-full border border-gray-300 rounded-lg p-3 mb-4 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
+                >
                   <option value="">-- Selecione um destino --</option>
                   {secretarias.map((sec) => <option key={sec.id} value={sec.id}>{sec.nome}</option>)}
                   <option value="outros">Outros (Digitar Manualmente)</option>
@@ -147,53 +189,49 @@ export default function NovoDocumento() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-gray-600 mb-1">Órgão</label>
-                      <input type="text" value={customNomeSecretaria} onChange={(e) => setCustomNomeSecretaria(e.target.value)} className="w-full border rounded-lg p-2.5" />
+                      <input 
+                        type="text" 
+                        value={customNomeSecretaria} 
+                        onChange={(e) => setCustomNomeSecretaria(e.target.value)} 
+                        className="w-full border border-gray-300 rounded-lg p-2.5 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" 
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-gray-600 mb-1">Titular</label>
-                      <input type="text" value={customNomeTitular} onChange={(e) => setCustomNomeTitular(e.target.value)} className="w-full border rounded-lg p-2.5" />
+                      <input 
+                        type="text" 
+                        value={customNomeTitular} 
+                        onChange={(e) => setCustomNomeTitular(e.target.value)} 
+                        className="w-full border border-gray-300 rounded-lg p-2.5 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" 
+                      />
                     </div>
                   </div>
                 )}
               </div>
             )}
             
+            {/* MOTIVO */}
             {mostrarMotivo && (
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Motivo</label>
-                <textarea rows={4} value={motivo} onChange={(e) => setMotivo(e.target.value)} className="w-full border border-gray-300 rounded-lg p-3" />
+                <textarea 
+                  rows={4} 
+                  value={motivo} 
+                  onChange={(e) => setMotivo(e.target.value)} 
+                  className="w-full border border-gray-300 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" 
+                />
               </div>
             )}
             
+            {/* CONTEÚDO (QUILL) */}
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">{labels.conteudo}</label>
               
-              {/* CSS Blindado: Força a legibilidade e a quebra de linha do texto colado do Word/PDF */}
               <style dangerouslySetInnerHTML={{__html: `
-                /* 1. Força a cor do texto a ficar escura e remove a transparência fantasma */
-                .ql-editor, .ql-editor * { 
-                  color: #111827 !important; 
-                  opacity: 1 !important; 
-                }
-                
-                /* 2. Força a quebra de linha automática e remove o scroll horizontal */
-                .ql-editor { 
-                  font-size: 15px;
-                  white-space: pre-wrap !important;
-                  word-wrap: break-word !important;
-                  overflow-wrap: break-word !important;
-                  overflow-x: hidden !important;
-                }
-
-                /* 3. Impede que tabelas coladas expandam além da largura permitida */
-                .ql-editor table {
-                  width: 100% !important;
-                  table-layout: fixed !important;
-                }
-                .ql-editor td, .ql-editor th {
-                  white-space: normal !important;
-                  word-break: break-word !important;
-                }
+                .ql-editor, .ql-editor * { color: #111827 !important; opacity: 1 !important; }
+                .ql-editor { font-size: 15px; white-space: pre-wrap !important; word-wrap: break-word !important; overflow-wrap: break-word !important; overflow-x: hidden !important; }
+                .ql-editor table { width: 100% !important; table-layout: fixed !important; }
+                .ql-editor td, .ql-editor th { white-space: normal !important; word-break: break-word !important; }
               `}} />
 
               <div className="bg-white border border-gray-300 rounded-lg overflow-hidden">
@@ -202,8 +240,8 @@ export default function NovoDocumento() {
             </div>
             
             <div className="flex flex-col sm:flex-row gap-3 pt-6">
-              <button disabled={loading} onClick={() => handleSubmit("RASCUNHO")} className="flex-1 bg-white border-2 border-gray-300 font-bold py-3 rounded-lg">💾 Guardar como Rascunho</button>
-              <button disabled={loading} onClick={() => handleSubmit("ENVIADO")} className="flex-1 bg-green-600 text-white font-bold py-3 rounded-lg">🚀 Enviar para a Secretaria</button>
+              <button disabled={loading} onClick={() => handleSubmit("RASCUNHO")} className="flex-1 bg-white border-2 border-gray-300 text-gray-800 hover:bg-gray-50 font-bold py-3 rounded-lg">💾 Guardar como Rascunho</button>
+              <button disabled={loading} onClick={() => handleSubmit("ENVIADO")} className="flex-1 bg-green-600 text-white hover:bg-green-700 font-bold py-3 rounded-lg shadow-md">🚀 Enviar para a Secretaria</button>
             </div>
           </div>
         </div>

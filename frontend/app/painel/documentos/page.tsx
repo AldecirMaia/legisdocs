@@ -1,11 +1,34 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+
+interface UserAuth {
+  id: string;
+  name: string;
+  role: string;
+  tenantId: string;
+  gabineteId: string;
+  [key: string]: unknown;
+}
+
+interface DocList {
+  id: string;
+  type: string;
+  protocolNum: number;
+  year: number;
+  status: string;
+  ementa: string;
+  secretariaDestino?: string;
+  feedbackSecretaria?: string; 
+  author?: { name: string };
+  createdAt: string;
+}
 
 export default function MeusDocumentos() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [documentos, setDocumentos] = useState<any[]>([]);
+  const [user, setUser] = useState<UserAuth | null>(null);
+  const [documentos, setDocumentos] = useState<DocList[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,7 +52,6 @@ export default function MeusDocumentos() {
     }
   };
 
-  // UX: Define as cores das etiquetas com base no status do documento
   const getStatusBadge = (status: string) => {
     const badges: Record<string, string> = {
       RASCUNHO: "bg-gray-100 text-gray-700 border-gray-300",
@@ -49,9 +71,9 @@ export default function MeusDocumentos() {
         <h1 className="text-2xl font-bold tracking-tight cursor-pointer" onClick={() => router.push("/painel")}>
           LegisDocs <span className="text-sm font-normal text-blue-300 ml-2">/ Meus Documentos</span>
         </h1>
-        <button onClick={() => router.push("/painel")} className="text-blue-200 hover:text-white font-semibold transition-colors">
+        <Link href="/painel" className="text-blue-200 hover:text-white font-semibold transition-colors">
           Voltar ao Painel
-        </button>
+        </Link>
       </header>
 
       <main className="flex-1 p-6 sm:p-10 max-w-6xl mx-auto w-full">
@@ -60,12 +82,12 @@ export default function MeusDocumentos() {
             <h2 className="text-3xl font-bold text-gray-800">Histórico de Documentos</h2>
             <p className="text-gray-600 mt-1">Acompanhe o andamento das suas indicações e requerimentos.</p>
           </div>
-          <button 
-            onClick={() => router.push("/painel/indicacao/nova")}
+          <Link 
+            href="/painel/indicacao/nova"
             className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg transition-colors shadow-sm"
           >
             + Novo Documento
-          </button>
+          </Link>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -80,17 +102,20 @@ export default function MeusDocumentos() {
           ) : (
             <ul className="divide-y divide-gray-100">
               {documentos.map((doc) => (
-                <li key={doc.id} className="p-5 hover:bg-gray-50 transition-colors flex flex-col sm:flex-row gap-4 justify-between sm:items-center">
+                <li key={doc.id} className="p-5 hover:bg-gray-50 transition-colors flex flex-col sm:flex-row gap-4 justify-between sm:items-start">
+                  
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-1">
                       <span className="font-mono font-bold text-blue-900 bg-blue-50 px-2 py-0.5 rounded text-sm border border-blue-100">
-                        {doc.type} Nº {String(doc.protocolNum).padStart(3, '0')}/{doc.year}
+                        {/* Se for > 0 mostra o número oficial, senão mostra "Cancelado/Sem Número" */}
+                        {doc.protocolNum > 0 ? `${doc.type} Nº ${String(doc.protocolNum).padStart(3, '0')}/${doc.year}` : `${doc.type} (Sem Número)`}
                       </span>
                       <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${getStatusBadge(doc.status)}`}>
                         {doc.status}
                       </span>
                     </div>
-                    <p className="text-gray-800 font-medium line-clamp-2">{doc.ementa}</p>
+                    <p className="text-gray-800 font-medium line-clamp-2 mt-1">{doc.ementa}</p>
+                    
                     <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 font-medium">
                       <span>Destino: {doc.secretariaDestino || 'N/A'}</span>
                       <span>•</span>
@@ -98,22 +123,30 @@ export default function MeusDocumentos() {
                       <span>•</span>
                       <span>Criado em: {new Date(doc.createdAt).toLocaleDateString('pt-BR')}</span>
                     </div>
+
+                    {(doc.status === "REFAZER" || doc.status === "CANCELADO") && doc.feedbackSecretaria && (
+                      <div className={`mt-3 p-3 rounded-lg text-sm border ${doc.status === "REFAZER" ? "bg-orange-50 border-orange-200 text-orange-800" : "bg-red-50 border-red-200 text-red-800"}`}>
+                        <strong className="flex items-center gap-1">
+                          {doc.status === "REFAZER" ? "⚠️ Motivo da Devolução:" : "❌ Motivo do Cancelamento:"}
+                        </strong> 
+                        <span className="block mt-1">{doc.feedbackSecretaria}</span>
+                      </div>
+                    )}
                   </div>
                   
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2 sm:mt-0 mt-2">
                     {doc.status === "RASCUNHO" || doc.status === "REFAZER" ? (
-                      <a href={`/painel/documentos/${doc.id}`} className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-semibold text-sm px-4 py-2 rounded-lg transition-colors block text-center">
+                      <Link href={`/painel/documentos/${doc.id}`} className="bg-white border border-gray-300 text-gray-900 hover:bg-gray-100 font-semibold text-sm px-4 py-2 rounded-lg transition-colors text-center">
                         Continuar Edição
-                      </a>
+                      </Link>
                     ) : (
-                      <a href={`/painel/documentos/${doc.id}`} className="bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold text-sm px-4 py-2 rounded-lg transition-colors block text-center">
+                      <Link href={`/painel/documentos/${doc.id}`} className="bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold text-sm px-4 py-2 rounded-lg transition-colors text-center">
                         Visualizar
-                      </a>
+                      </Link>
                     )}
 
-                    {/* Botão de PDF Oficial: visível apenas se o documento estiver APROVADO */}
                     {doc.status === "APROVADO" && (
-                      <a href={`/painel/documentos/${doc.id}/pdf`} target="_blank" rel="noopener noreferrer" className="bg-green-600 text-white hover:bg-green-700 font-semibold text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-sm">
+                      <a href={`/painel/documentos/${doc.id}/pdf`} target="_blank" rel="noopener noreferrer" className="bg-green-600 text-white hover:bg-green-700 font-semibold text-sm px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm">
                         🖨️ PDF Oficial
                       </a>
                     )}

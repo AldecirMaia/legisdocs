@@ -21,20 +21,28 @@ export class DocumentService {
   }) {
     const currentYear = new Date().getFullYear();
 
-    // 1. Descobre o último número de protocolo desta Câmara no ano atual PARA ESTE TIPO DE DOCUMENTO
-    const lastDoc = await prisma.document.findFirst({
+    // 1. Pega todos os protocolos válidos (maiores que 0) deste ano e tipo
+    const allDocs = await prisma.document.findMany({
       where: { 
         tenantId: data.tenantId, 
         year: currentYear,
-        type: data.type // <-- NOVA REGRA: A numeração agora é separada por tipo (Indicação, Ofício, etc.)
+        type: data.type,
+        protocolNum: { gt: 0 } // Ignora os documentos cancelados
       },
-      orderBy: { protocolNum: 'desc' },
+      select: { protocolNum: true },
+      orderBy: { protocolNum: 'asc' },
     });
 
-    // 2. Se já existir um documento deste tipo, soma 1. Se for o primeiro do ano, começa no 1.
-    const nextProtocolNum = lastDoc ? lastDoc.protocolNum + 1 : 1;
+    // 2. Lógica para preencher buracos (Gaps) deixados por cancelamentos
+    let nextProtocolNum = 1;
+    for (const doc of allDocs) {
+      if (doc.protocolNum === nextProtocolNum) {
+        nextProtocolNum++;
+      } else if (doc.protocolNum > nextProtocolNum) {
+        break; // Achámos um buraco! O número 'nextProtocolNum' está livre.
+      }
+    }
 
-    // 3. Grava o documento de forma definitiva
     return await prisma.document.create({
       data: {
         protocolNum: nextProtocolNum,
@@ -54,24 +62,17 @@ export class DocumentService {
     });
   }
 
-  // Lista todos os documentos de um gabinete específico
   async findByGabinete(gabineteId: string) {
     return await prisma.document.findMany({
       where: { gabineteId },
       orderBy: { createdAt: 'desc' }, 
-      include: { 
-        author: { select: { name: true, partido: true } } 
-      }
+      include: { author: { select: { name: true, partido: true } } }
     });
   }
 
-  // Lista os documentos que aguardam análise da Secretaria
   async findFilaAnalise(tenantId: string) {
     return await prisma.document.findMany({
-      where: { 
-        tenantId,
-        status: 'ENVIADO' 
-      },
+      where: { tenantId, status: 'ENVIADO' },
       orderBy: { createdAt: 'asc' }, 
       include: { 
         author: { select: { name: true, partido: true } },
@@ -79,8 +80,22 @@ export class DocumentService {
       }
     });
   }
-
-  // Busca os detalhes completos de um documento específico
+async findAprovados(tenantId: string) {
+    return await prisma.document.findMany({
+      where: { 
+        tenantId, 
+        status: 'APROVADO' 
+      },
+      orderBy: [
+        { type: 'asc' }, // Agrupa por tipo (Indicações, Ofícios, etc)
+        { protocolNum: 'asc' } // Ordena pelo número
+      ],
+      include: { 
+        author: { select: { name: true, partido: true } },
+        gabinete: { select: { name: true } }
+      }
+    });
+  }
   async findOne(id: string) {
     return await prisma.document.findUnique({
       where: { id },
@@ -91,18 +106,23 @@ export class DocumentService {
     });
   }
 
-  // Atualiza o status e adiciona o feedback da Secretaria (se houver)
   async updateStatus(id: string, status: DocumentStatus, feedbackSecretaria?: string) {
+    const updateData: any = { 
+      status, 
+      feedbackSecretaria: feedbackSecretaria || null 
+    };
+
+    // 3. Quando a Secretaria CANCELA, o documento perde o seu número oficial (fica com um negativo aleatório para não dar erro na base de dados)
+    if (status === 'CANCELADO') {
+       updateData.protocolNum = -Math.floor(Date.now() / 1000) - Math.floor(Math.random() * 1000);
+    }
+
     return await prisma.document.update({
       where: { id },
-      data: { 
-        status,
-        feedbackSecretaria: feedbackSecretaria || null
-      },
+      data: updateData,
     });
   }
 
-  // Atualiza o conteúdo do documento (usado pelo Gabinete para editar rascunhos ou refazer documentos)
   async updateDocument(id: string, data: any) {
     return await prisma.document.update({
       where: { id },

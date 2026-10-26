@@ -1,23 +1,54 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import dynamic from "next/dynamic";
 import "react-quill-new/dist/quill.snow.css";
 
 const ReactQuill = dynamic(() => import("react-quill-new"), { ssr: false });
 
+interface UserAuth {
+  id: string;
+  name: string;
+  role: string;
+  tenantId: string;
+  gabineteId: string;
+  [key: string]: unknown;
+}
+
+interface Secretaria {
+  id: string;
+  nome: string;
+  titular: string;
+  [key: string]: unknown;
+}
+
+interface DocData {
+  id: string;
+  type: string;
+  protocolNum: number;
+  year: number;
+  status: string;
+  ementa: string;
+  motivo?: string;
+  justificativa?: string;
+  secretariaDestino?: string;
+  nomeSecretario?: string;
+  feedback?: string;
+  feedbackSecretaria?: string;
+  [key: string]: unknown;
+}
+
 export default function EditarDocumento({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
-  
   const [docId, setDocId] = useState<string>("");
-  const [user, setUser] = useState<any>(null);
-  const [secretarias, setSecretarias] = useState<any[]>([]);
-  
+  const [user, setUser] = useState<UserAuth | null>(null);
+  const [secretarias, setSecretarias] = useState<Secretaria[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" | "info" } | null>(null);
 
-  const [docOriginal, setDocOriginal] = useState<any>(null);
+  const [docOriginal, setDocOriginal] = useState<DocData | null>(null);
   const [ementa, setEmenta] = useState("");
   const [motivo, setMotivo] = useState("");
   const [justificativa, setJustificativa] = useState("");
@@ -34,7 +65,6 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
     if (!storedUser) return router.push("/");
     const parsedUser = JSON.parse(storedUser);
     setUser(parsedUser);
-    
     carregarSecretarias(parsedUser.tenantId);
     if (docId) carregarDocumento(docId);
   }, [router, docId]);
@@ -42,8 +72,11 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
   const carregarSecretarias = async (tenantId: string) => {
     try {
       const res = await fetch(`http://localhost:4000/secretaria-destino/list/active/${tenantId}`);
-      setSecretarias(await res.json());
-    } catch (error) { console.error(error); }
+      const data = await res.json();
+      setSecretarias(data);
+    } catch (error) { 
+      console.error(error); 
+    }
   };
 
   const carregarDocumento = async (id: string) => {
@@ -54,11 +87,9 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
       setEmenta(data.ementa || "");
       setMotivo(data.motivo || "");
       setJustificativa(data.justificativa || "");
-      
       setSecretariaSelecionada("outros");
       setCustomNomeSecretaria(data.secretariaDestino || "");
       setCustomNomeTitular(data.nomeSecretario || "");
-      
     } catch (error) {
       console.error(error);
     } finally {
@@ -74,7 +105,6 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
   const isOutros = secretariaSelecionada === "outros";
   const secretariaEncontrada = secretarias.find((s) => s.id === secretariaSelecionada);
   const isReadOnly = docOriginal?.status === "ENVIADO" || docOriginal?.status === "APROVADO" || docOriginal?.status === "CANCELADO";
-
   const tipo = docOriginal?.type || "INDICACAO";
   const mostrarSecretaria = tipo === "INDICACAO" || tipo === "OFICIO";
   const mostrarMotivo = tipo === "INDICACAO";
@@ -105,7 +135,6 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
 
   const handleUpdate = async (novoStatus: "RASCUNHO" | "ENVIADO") => {
     if (!ementa.trim()) return showToast("A ementa é obrigatória.", "error");
-
     setSaving(true);
     const payload = {
       status: novoStatus, 
@@ -124,7 +153,6 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
       });
 
       if (!res.ok) throw new Error();
-
       showToast(novoStatus === "ENVIADO" ? "Reenviado para análise!" : "Rascunho atualizado!", "success");
       setTimeout(() => router.push("/painel/documentos"), 2000);
     } catch (error) {
@@ -133,10 +161,13 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
     }
   };
 
-  if (loading || !user) return <div className="p-10 text-gray-500 animate-pulse">A carregar documento...</div>;
+  if (loading || !user || !docOriginal) return <div className="p-10 text-gray-500 animate-pulse">A carregar documento...</div>;
+
+  // Lógica para puxar o motivo com segurança, prevenindo espaços vazios de API's antigas
+  const motivoDevolucao = docOriginal.feedbackSecretaria || docOriginal.feedback || "Motivo não especificado. Entre em contacto com a secretaria.";
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col pb-10 relative">
+    <div lang="pt-BR" className="min-h-screen bg-gray-50 flex flex-col pb-10 relative">
       {toast && (
         <div className={`fixed bottom-6 right-6 px-6 py-4 rounded-xl shadow-2xl text-white font-bold text-sm z-50 flex items-center gap-3 animate-in slide-in-from-bottom-8 ${toast.type === "success" ? "bg-green-600" : "bg-red-600"}`}>
           <span className="text-xl">{toast.type === "success" ? "✅" : "⚠️"}</span> {toast.msg}
@@ -144,8 +175,8 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
       )}
 
       <header className="bg-blue-800 text-white p-4 shadow-md flex justify-between items-center">
-        <h1 className="text-2xl font-bold tracking-tight">LegisDocs <span className="text-sm text-blue-300 ml-2">/ Documento Nº {String(docOriginal.protocolNum).padStart(3, '0')}/{docOriginal.year}</span></h1>
-        <button onClick={() => router.push("/painel/documentos")} className="text-blue-200 hover:text-white font-semibold">Voltar</button>
+        <h1 className="text-2xl font-bold tracking-tight">LegisDocs <span className="text-sm text-blue-300 ml-2">/ {docOriginal.protocolNum > 0 ? `Documento Nº ${String(docOriginal.protocolNum).padStart(3, '0')}/${docOriginal.year}` : `Documento (Sem Número)`}</span></h1>
+        <Link href="/painel/documentos" className="text-blue-200 hover:text-white font-semibold">Voltar</Link>
       </header>
 
       <main className="flex-1 p-6 sm:p-10 max-w-4xl mx-auto w-full">
@@ -153,7 +184,7 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
         {docOriginal.status === "REFAZER" && (
           <div className="bg-orange-50 border-l-4 border-orange-500 p-5 rounded-r-xl shadow-sm mb-6 flex flex-col gap-2">
             <h3 className="font-bold text-orange-800 flex items-center gap-2"><span>⚠️</span> Documento Devolvido pela Secretaria</h3>
-            <p className="text-orange-700 text-sm"><strong>Motivo:</strong> {docOriginal.feedbackSecretaria}</p>
+            <p className="text-orange-700 text-sm"><strong>Motivo:</strong> {motivoDevolucao}</p>
             <p className="text-orange-600 text-xs mt-1">Por favor, corrija as informações abaixo e reenvie para análise. Use o botão <strong>Tx</strong> no editor se precisar limpar formatações estranhas.</p>
           </div>
         )}
@@ -161,7 +192,7 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
         {docOriginal.status === "CANCELADO" && (
           <div className="bg-red-50 border-l-4 border-red-500 p-5 rounded-r-xl shadow-sm mb-6 flex flex-col gap-2">
             <h3 className="font-bold text-red-800 flex items-center gap-2"><span>❌</span> Documento Cancelado</h3>
-            <p className="text-red-700 text-sm"><strong>Motivo:</strong> {docOriginal.feedbackSecretaria}</p>
+            <p className="text-red-700 text-sm"><strong>Motivo:</strong> {motivoDevolucao}</p>
           </div>
         )}
 
@@ -169,7 +200,7 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
           <div className="p-6 sm:p-8 space-y-6">
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">{labels.ementa}</label>
-              <textarea rows={2} disabled={isReadOnly} value={ementa} onChange={(e) => setEmenta(e.target.value)} className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 text-gray-800 disabled:bg-gray-100" />
+              <textarea rows={2} disabled={isReadOnly} value={ementa} onChange={(e) => setEmenta(e.target.value)} className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 disabled:bg-gray-100 disabled:text-gray-700" />
             </div>
 
             <hr className="border-gray-200" />
@@ -177,7 +208,7 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
             {mostrarSecretaria && (
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                 <label className="block text-sm font-bold text-gray-700 mb-2">Secretaria de Destino</label>
-                <select disabled={isReadOnly} value={secretariaSelecionada} onChange={(e) => setSecretariaSelecionada(e.target.value)} className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 bg-white mb-4 disabled:bg-gray-100">
+                <select disabled={isReadOnly} value={secretariaSelecionada} onChange={(e) => setSecretariaSelecionada(e.target.value)} className="w-full border border-gray-300 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none bg-white mb-4 disabled:bg-gray-100 disabled:text-gray-700">
                   <option value="outros">Definido Manualmente (Outros)</option>
                   {secretarias.map((sec) => <option key={sec.id} value={sec.id}>{sec.nome}</option>)}
                 </select>
@@ -186,11 +217,11 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <div>
                       <label className="block text-xs font-bold text-gray-600 mb-1">Nome da Secretaria / Órgão</label>
-                      <input type="text" disabled={isReadOnly} value={customNomeSecretaria} onChange={(e) => setCustomNomeSecretaria(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm text-gray-800 disabled:bg-gray-100" />
+                      <input type="text" disabled={isReadOnly} value={customNomeSecretaria} onChange={(e) => setCustomNomeSecretaria(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-700" />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-gray-600 mb-1">Nome do Titular</label>
-                      <input type="text" disabled={isReadOnly} value={customNomeTitular} onChange={(e) => setCustomNomeTitular(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm text-gray-800 disabled:bg-gray-100" />
+                      <input type="text" disabled={isReadOnly} value={customNomeTitular} onChange={(e) => setCustomNomeTitular(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-700" />
                     </div>
                   </div>
                 )}
@@ -202,67 +233,34 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
             {mostrarMotivo && (
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Motivo da Indicação</label>
-                <textarea rows={4} disabled={isReadOnly} value={motivo} onChange={(e) => setMotivo(e.target.value)} className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 disabled:bg-gray-100" />
+                <textarea rows={4} disabled={isReadOnly} value={motivo} onChange={(e) => setMotivo(e.target.value)} className="w-full border border-gray-300 rounded-lg p-3 text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-700" />
               </div>
             )}
 
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">{labels.conteudo}</label>
-              
-              {/* CSS Blindado: Força a legibilidade e a quebra de linha do texto colado do Word/PDF */}
               <style dangerouslySetInnerHTML={{__html: `
-                /* 1. Força a cor do texto a ficar escura e remove a transparência fantasma */
-                .ql-editor, .ql-editor * { 
-                  color: #111827 !important; 
-                  opacity: 1 !important; 
-                }
-                
-                /* 2. Força a quebra de linha automática e remove o scroll horizontal */
-                .ql-editor { 
-                  font-size: 15px;
-                  white-space: pre-wrap !important;
-                  word-wrap: break-word !important;
-                  overflow-wrap: break-word !important;
-                  overflow-x: hidden !important;
-                }
-
-                /* 3. Impede que tabelas coladas expandam além da largura permitida */
-                .ql-editor table {
-                  width: 100% !important;
-                  table-layout: fixed !important;
-                }
-                .ql-editor td, .ql-editor th {
-                  white-space: normal !important;
-                  word-break: break-word !important;
-                }
-
-                /* CSS para o modo de leitura (isReadOnly) */
+                .ql-editor, .ql-editor * { color: #111827 !important; opacity: 1 !important; }
+                .ql-editor { font-size: 15px; white-space: pre-wrap !important; word-wrap: break-word !important; overflow-wrap: break-word !important; overflow-x: hidden !important; }
+                .ql-editor table { width: 100% !important; table-layout: fixed !important; }
+                .ql-editor td, .ql-editor th { white-space: normal !important; word-break: break-word !important; }
                 .html-content { font-size: 15px; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; overflow-x: hidden; color: #111827; }
                 .html-content table { width: 100% !important; table-layout: fixed !important; border-collapse: collapse; margin: 1rem 0; }
                 .html-content td, .html-content th { border: 1px solid #d1d5db; padding: 8px; white-space: normal !important; word-break: break-word !important; }
               `}} />
 
               {isReadOnly ? (
-                <div 
-                  className="bg-gray-100 border border-gray-300 rounded-lg p-4 h-96 overflow-y-auto html-content"
-                  dangerouslySetInnerHTML={{ __html: justificativa }}
-                ></div>
+                <div className="bg-gray-100 border border-gray-300 rounded-lg p-4 h-96 overflow-y-auto html-content" dangerouslySetInnerHTML={{ __html: justificativa }}></div>
               ) : (
                 <div className="bg-white border border-gray-300 rounded-lg overflow-hidden">
-                  <ReactQuill 
-                    theme="snow" 
-                    value={justificativa} 
-                    onChange={setJustificativa} 
-                    modules={modules}
-                    className="h-96 pb-12 border-none" 
-                  />
+                  <ReactQuill theme="snow" value={justificativa} onChange={setJustificativa} modules={modules} className="h-96 pb-12 border-none" />
                 </div>
               )}
             </div>
 
             {!isReadOnly && (
               <div className="flex flex-col sm:flex-row gap-3 pt-6">
-                <button disabled={saving} onClick={() => handleUpdate("RASCUNHO")} className="flex-1 bg-white border-2 border-gray-300 text-gray-700 hover:bg-gray-50 font-bold py-3 px-6 rounded-lg disabled:opacity-50">
+                <button disabled={saving} onClick={() => handleUpdate("RASCUNHO")} className="flex-1 bg-white border-2 border-gray-300 text-gray-800 hover:bg-gray-50 font-bold py-3 px-6 rounded-lg disabled:opacity-50">
                   💾 Atualizar Rascunho
                 </button>
                 <button disabled={saving} onClick={() => handleUpdate("ENVIADO")} className="flex-1 bg-green-600 text-white hover:bg-green-700 font-bold py-3 px-6 rounded-lg shadow-md disabled:opacity-50">

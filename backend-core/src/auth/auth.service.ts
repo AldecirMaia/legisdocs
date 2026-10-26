@@ -9,7 +9,11 @@ export class AuthService {
   constructor(private jwtService: JwtService) {}
 
   async login(email: string, pass: string) {
-    const user = await prisma.user.findUnique({ where: { email } });
+    // 1. Incluir os dados do Tenant na busca para verificar o status
+    const user = await prisma.user.findUnique({ 
+      where: { email },
+      include: { tenant: true } 
+    });
     
     if (!user) {
       throw new UnauthorizedException('E-mail não encontrado');
@@ -19,7 +23,15 @@ export class AuthService {
       throw new UnauthorizedException('Palavra-passe incorreta');
     }
 
-    // Adicionado gabineteId ao payload do token
+    // 2. NOVA REGRA: Bloquear o acesso se a Câmara (Tenant) estiver inativa
+    // O SUPER_ADMIN tem imunidade para nunca ficar trancado fora do sistema
+    if (user.role !== 'SUPER_ADMIN' && user.tenant && user.tenant.isActive === false) {
+      throw new UnauthorizedException('O acesso desta Câmara encontra-se suspenso.');
+    }
+    if (user.role !== 'SUPER_ADMIN' && user.isActive === false) {
+      throw new UnauthorizedException('O seu acesso de utilizador foi bloqueado pelo administrador.');
+    }
+
     const payload = { 
       sub: user.id, 
       email: user.email, 
@@ -35,7 +47,7 @@ export class AuthService {
         name: user.name,
         role: user.role,
         tenantId: user.tenantId,
-        gabineteId: user.gabineteId // <-- Informação crucial adicionada aqui
+        gabineteId: user.gabineteId
       }
     };
   }

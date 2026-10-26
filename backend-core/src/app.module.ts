@@ -6,7 +6,8 @@ import { GabineteModule } from './gabinete/gabinete.module';
 import { UserModule } from './user/user.module';
 import { SecretariaDestinoModule } from './secretaria-destino/secretaria-destino.module';
 import { DocumentModule } from './document/document.module';
-import { TenantModule } from './tenant/tenant.module'; // <-- IMPORTAÇÃO AQUI
+import { TenantModule } from './tenant/tenant.module'; 
+import { SuperAdminController } from './super-admin/super-admin.controller';
 
 @Module({
   imports: [
@@ -15,9 +16,13 @@ import { TenantModule } from './tenant/tenant.module'; // <-- IMPORTAÇÃO AQUI
     UserModule,
     SecretariaDestinoModule,
     DocumentModule,
-    TenantModule, // <-- REGISTO AQUI
+    TenantModule, 
+    // O SuperAdminController foi retirado daqui!
   ],
-  controllers: [AppController],
+  controllers: [
+    AppController,
+    SuperAdminController // <-- O REGISTO CORRETO É AQUI!
+  ],
   providers: [AppService],
 })
 export class AppModule {}
