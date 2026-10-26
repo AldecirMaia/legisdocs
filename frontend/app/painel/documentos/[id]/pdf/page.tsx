@@ -46,11 +46,10 @@ export default function DocumentoPDF({ params }: { params: Promise<{ id: string 
   return (
     <div className="min-h-screen bg-gray-200 py-8 flex flex-col items-center print:py-0 print:p-0 print:m-0 print:bg-white print:block">
       
-      {/* CSS Global para Impressão e Repetição de Assinatura/Rodapé por Página */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
           @page { 
-            margin: 0; /* Zera a margem para remover cabeçalhos/rodapés do navegador */
+            margin: 0; 
             size: A4;
           }
           body { 
@@ -72,11 +71,11 @@ export default function DocumentoPDF({ params }: { params: Promise<{ id: string 
         }
 
         .html-content { width: 100%; max-width: 100%; overflow-wrap: break-word; word-wrap: break-word; }
-        .html-content table { width: 100% !important; table-layout: fixed; border-collapse: collapse; margin-bottom: 1.5rem; }
+        .html-content table { width: 100% !important; table-layout: fixed; border-collapse: collapse; margin-bottom: 1rem; }
         .html-content table, .html-content th, .html-content td { border: 1px solid black; overflow: hidden; word-break: break-word; }
-        .html-content th, .html-content td { padding: 6px 8px; text-align: left; font-size: 12px; }
+        .html-content th, .html-content td { padding: 4px 6px; text-align: left; font-size: 11px; }
         .html-content th { background-color: #f2f2f2 !important; -webkit-print-color-adjust: exact; }
-        .html-content p { margin-bottom: 0.75rem; width: 100%; }
+        .html-content p { margin-bottom: 0.5rem; width: 100%; text-indent: 2.5rem; text-align: justify; }
       `}} />
 
       <div className="w-full max-w-[210mm] mb-6 flex justify-between items-center no-print">
@@ -88,7 +87,7 @@ export default function DocumentoPDF({ params }: { params: Promise<{ id: string 
         </button>
       </div>
 
-      <div className="w-[210mm] min-h-[297mm] bg-white relative shadow-2xl print:shadow-none print:w-full print:max-w-none print:h-auto print:m-0 font-serif text-[15px] leading-relaxed text-black block box-border">
+      <div className="w-[210mm] min-h-[297mm] bg-white relative shadow-2xl print:shadow-none print:w-full print:max-w-none print:h-auto print:m-0 font-serif text-[12px] leading-relaxed text-black block box-border">
         
         {tenant?.marcaDagua && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 opacity-10 watermark-print">
@@ -96,57 +95,54 @@ export default function DocumentoPDF({ params }: { params: Promise<{ id: string 
           </div>
         )}
 
-        {/* Margem interna do documento de 10mm (evita cortes da impressora física) */}
         <div className="px-[15mm] py-[15mm] print:px-[10mm] print:py-[10mm] relative z-10 box-border">
           
-          {/* CABEÇALHO DIVIDIDO */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <div className="w-24 h-24 flex-shrink-0 flex items-center justify-center">
               {tenant?.logoCabecalho && (
                 <img src={tenant.logoCabecalho} alt="Logo da Câmara" className="max-w-full max-h-full object-contain" />
               )}
             </div>
             <div className="flex-1 text-center font-bold flex flex-col justify-center">
-              <span className="text-[16px] uppercase tracking-wide">Poder Legislativo</span>
-              <span className="text-[19px] uppercase tracking-wider my-1">Câmara Municipal de {nomeCidade}</span>
-              <span className="text-[14px] uppercase tracking-wide">Estado do Rio Grande do Norte</span>
+              <span className="text-[15px] uppercase tracking-wide">Poder Legislativo</span>
+              <span className="text-[18px] uppercase tracking-wider my-1">Câmara Municipal de {nomeCidade}</span>
+              <span className="text-[13px] uppercase tracking-wide">Estado do Rio Grande do Norte</span>
             </div>
             <div className="w-24 flex-shrink-0"></div>
           </div>
 
-          {/* RENDERIZAÇÃO DINÂMICA DO CORPO */}
           {(() => {
             switch (doc.type) {
               case "OFICIO":
                 return (
-                  <div className="text-[15px]">
-                    <h1 className="text-right font-bold mb-4">
+                  <div className="text-[12px]">
+                    <h1 className="text-right font-bold mb-3">
                       OFÍCIO n. {String(doc.protocolNum).padStart(3, '0')}/{doc.year}-Gab/{doc.author?.name?.toUpperCase()}
                     </h1>
-                    <p className="text-right mb-8">{tenant?.cidadeEstado}, {dataFormatada}.</p>
+                    <p className="text-right mb-6">{tenant?.cidadeEstado}, {dataFormatada}.</p>
                     <p className="font-bold uppercase">AO. ILMº. SRº.</p>
                     <p className="font-bold uppercase">{doc.nomeSecretario}</p>
-                    <p className="font-medium mb-6">{doc.secretariaDestino}</p>
-                    <p className="font-bold mb-6">Assunto: {doc.ementa}</p>
-                    <div className="text-justify leading-relaxed mb-12 html-content" dangerouslySetInnerHTML={{ __html: doc.justificativa || "" }}></div>
+                    <p className="font-medium mb-4">{doc.secretariaDestino}</p>
+                    <p className="font-bold mb-4">Assunto: {doc.ementa}</p>
+                    <div className="text-justify leading-relaxed mb-8 html-content" dangerouslySetInnerHTML={{ __html: doc.justificativa || "" }}></div>
                   </div>
                 );
 
               case "MOCAO":
                 return (
-                  <div className="text-[15px]">
-                    <h1 className="text-center font-bold text-[20px] mb-8 uppercase tracking-wide underline">MOÇÃO DE APLAUSOS/REPÚDIO</h1>
-                    <div className="text-justify leading-relaxed mb-12 html-content" dangerouslySetInnerHTML={{ __html: doc.justificativa || "" }}></div>
+                  <div className="text-[12px]">
+                    <h1 className="text-center font-bold text-[18px] mb-6 uppercase tracking-wide underline">MOÇÃO DE APLAUSOS/REPÚDIO</h1>
+                    <div className="text-justify leading-relaxed mb-8 html-content" dangerouslySetInnerHTML={{ __html: doc.justificativa || "" }}></div>
                   </div>
                 );
 
               case "PARECER":
                 return (
-                  <div className="text-[15px]">
-                    <h1 className="text-left font-bold text-[16px] mb-2 uppercase">PARECER Nº {String(doc.protocolNum).padStart(3, '0')}/{doc.year}-CFO</h1>
+                  <div className="text-[12px]">
+                    <h1 className="text-left font-bold text-[15px] mb-2 uppercase">PARECER Nº {String(doc.protocolNum).padStart(3, '0')}/{doc.year}-CFO</h1>
                     <p className="font-bold text-justify mb-2">Referência: “{doc.ementa}”</p>
-                    <p className="font-bold mb-8">Relator: {doc.author?.name}</p>
-                    <div className="text-justify leading-relaxed mb-12 html-content" dangerouslySetInnerHTML={{ __html: doc.justificativa || "" }}></div>
+                    <p className="font-bold mb-6">Relator: {doc.author?.name}</p>
+                    <div className="text-justify leading-relaxed mb-8 html-content" dangerouslySetInnerHTML={{ __html: doc.justificativa || "" }}></div>
                   </div>
                 );
 
@@ -154,64 +150,62 @@ export default function DocumentoPDF({ params }: { params: Promise<{ id: string 
               case "EMENDA_ADITIVA":
               case "EMENDA_IMPOSITIVA":
                 return (
-                  <div className="text-[15px]">
-                    <h1 className="text-center font-bold text-[18px] mb-6 uppercase tracking-wide">
+                  <div className="text-[12px]">
+                    <h1 className="text-center font-bold text-[17px] mb-4 uppercase tracking-wide">
                       {doc.type === "PROJETO_LEI" ? `PROJETO DE LEI Nº ${String(doc.protocolNum).padStart(3, '0')}/${doc.year}` : 
                        doc.type === "EMENDA_ADITIVA" ? `EMENDA PARLAMENTAR ADITIVA Nº ${String(doc.protocolNum).padStart(3, '0')}/${doc.year}` : 
                        `EMENDA IMPOSITIVA Nº ${String(doc.protocolNum).padStart(3, '0')}/${doc.year}`}
                     </h1>
-                    <div className="ml-auto w-1/2 text-justify text-[14px] font-bold mb-8 italic"><p>{doc.ementa}</p></div>
-                    <div className="text-justify leading-relaxed mb-10 html-content" dangerouslySetInnerHTML={{ __html: doc.justificativa || "" }}></div>
+                    <div className="ml-auto w-1/2 text-justify text-[13px] font-bold mb-6 italic"><p>{doc.ementa}</p></div>
+                    <div className="text-justify leading-relaxed mb-8 html-content" dangerouslySetInnerHTML={{ __html: doc.justificativa || "" }}></div>
                   </div>
                 );
 
               default: 
                 return (
-                  <div className="text-[15px]">
-                    <h1 className="text-center font-bold text-[18px] mb-6 uppercase tracking-wide">INDICAÇÃO Nº {doc.protocolNum}/{doc.year}</h1>
-                    <div className="ml-auto w-1/2 text-justify text-[14px] mb-6">
+                  <div className="text-[12px]">
+                    <h1 className="text-center font-bold text-[17px] mb-4 uppercase tracking-wide">INDICAÇÃO Nº {doc.protocolNum}/{doc.year}</h1>
+                    <div className="ml-auto w-1/2 text-justify text-[13px] mb-4">
                       <p>Indico à Exmª. Srª. Prefeita Municipal, <strong>{tenant?.prefeitoNome}</strong>, que encaminhe ao Sec. Mun. de <strong>{doc.secretariaDestino}</strong>, <strong>{doc.nomeSecretario}</strong>, {doc.ementa}</p>
                     </div>
-                    <p className="text-justify indent-8 mb-6">
+                    <p className="text-justify indent-10 mb-4">
                       Apresento a Vossas Excelências, nos termos do {tenant?.artigoIndicacao}, a presente indicação, que após lida em Plenário seja encaminhada Exmª. Srª. Prefeita Municipal, <strong>{tenant?.prefeitoNome}</strong>, que encaminhe ao Sec. Mun. de <strong>{doc.secretariaDestino}</strong>, <strong>{doc.nomeSecretario}</strong>, {doc.ementa}
                     </p>
-                    <h2 className="text-center font-bold text-[16px] mb-3 uppercase tracking-wider">JUSTIFICATIVA</h2>
-                    <div className="text-justify leading-relaxed mb-10 html-content" dangerouslySetInnerHTML={{ __html: doc.justificativa || doc.motivo || "" }}></div>
+                    <h2 className="text-center font-bold text-[15px] mb-2 uppercase tracking-wider">JUSTIFICATIVA</h2>
+                    <div className="text-justify leading-relaxed mb-6 html-content" dangerouslySetInnerHTML={{ __html: doc.justificativa || doc.motivo || "" }}></div>
                   </div>
                 );
             }
           })()}
 
-          {/* ASSINATURA PRINCIPAL (Última Página) */}
-          <div className="mt-8 break-inside-avoid">
+          <div className="mt-6 break-inside-avoid">
             {doc.type !== "OFICIO" && (
               <>
-                <p className="text-[14px] text-gray-800 mb-1">Palácio: {tenant?.palacioNome}</p>
-                <p className="text-[14px] text-gray-800 mb-6">Sala das Sessões: {tenant?.salaSessoesNome}</p>
+                <p className="text-[13px] text-gray-800 mb-1">Palácio: {tenant?.palacioNome}</p>
+                <p className="text-[13px] text-gray-800 mb-4">Sala das Sessões: {tenant?.salaSessoesNome}</p>
               </>
             )}
 
             {doc.type !== "OFICIO" && (
-              <p className="text-right font-medium mb-12">
+              <p className="text-right font-medium mb-8">
                 {tenant?.cidadeEstado}, {dataFormatada}.
               </p>
             )}
 
-            <div className="text-center flex flex-col items-center mt-10">
-              <div className="w-72 border-t border-black pt-2 mb-1">
-                <p className="font-bold uppercase tracking-wider">{doc.author?.name}</p>
+            <div className="text-center flex flex-col items-center mt-6">
+              <div className="w-64 border-t border-black pt-2 mb-1">
+                <p className="font-bold uppercase tracking-wider text-[13px]">{doc.author?.name}</p>
               </div>
-              <p className="text-sm uppercase font-semibold">
+              <p className="text-[12px] uppercase font-semibold">
                 {doc.type === "PARECER" ? "VEREADOR(A) RELATOR(A)" : `VEREADOR(A) ${doc.author?.partido ? `- ${doc.author.partido}` : ""}`}
               </p>
             </div>
           </div>
 
-          {/* RODAPÉ EDITÁVEL DO TENANT */}
-          <div className="w-full border-t-[1.5px] border-black pt-2 mt-10 text-center break-inside-avoid">
-            <p className="font-bold text-sm uppercase">Palácio {tenant?.palacioNome}</p>
-            <p className="text-xs text-gray-800">{tenant?.enderecoRodape || "Rua do Horto Florestal, 506 Centro, Baraúna-RN // CEP: 59.695-000"}</p>
-            <p className="text-xs text-gray-800">{tenant?.contatoRodape || "http://barauna.rn.leg.br/ // cmb.barauna@gmail.com"}</p>
+          <div className="w-full border-t-[1.5px] border-black pt-2 mt-6 text-center break-inside-avoid">
+            <p className="font-bold text-[13px] uppercase">Palácio {tenant?.palacioNome}</p>
+            <p className="text-[11px] text-gray-800">{tenant?.enderecoRodape || "Rua do Horto Florestal, 506 Centro, Baraúna-RN // CEP: 59.695-000"}</p>
+            <p className="text-[11px] text-gray-800">{tenant?.contatoRodape || "http://barauna.rn.leg.br/ // cmb.barauna@gmail.com"}</p>
           </div>
 
         </div>
