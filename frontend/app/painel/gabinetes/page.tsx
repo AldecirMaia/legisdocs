@@ -33,7 +33,7 @@ export default function GestaoGabinetes() {
     setLoading(true);
 
     try {
-      await fetch("`${process.env.NEXT_PUBLIC_API_URL}/gabinete/create", {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/gabinete/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: nomeGabinete, tenantId: user.tenantId }),
