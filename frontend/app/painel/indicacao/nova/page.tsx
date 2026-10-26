@@ -48,7 +48,7 @@ export default function NovoDocumento() {
 
   const carregarSecretarias = async (tenantId: string) => {
     try {
-      const res = await fetch(${`process.env.NEXT_PUBLIC_API_URL}/secretaria-destino/list/active/${tenantId}`);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/secretaria-destino/list/active/${tenantId}`);
       const data = await res.json();
       setSecretarias(data);
     } catch (error) {

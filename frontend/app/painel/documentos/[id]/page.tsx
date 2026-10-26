@@ -71,7 +71,7 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
 
   const carregarSecretarias = async (tenantId: string) => {
     try {
-      const res = await fetch(${`process.env.NEXT_PUBLIC_API_URL}/secretaria-destino/list/active/${tenantId}`);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/secretaria-destino/list/active/${tenantId}`);
       const data = await res.json();
       setSecretarias(data);
     } catch (error) { 
@@ -81,7 +81,7 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
 
   const carregarDocumento = async (id: string) => {
     try {
-      const res = await fetch(${`process.env.NEXT_PUBLIC_API_URL}/document/detalhe/${id}`);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/document/detalhe/${id}`);
       const data = await res.json();
       setDocOriginal(data);
       setEmenta(data.ementa || "");
@@ -146,7 +146,7 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
     };
 
     try {
-      const res = await fetch(${`process.env.NEXT_PUBLIC_API_URL}/document/edit/${docId}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/document/edit/${docId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

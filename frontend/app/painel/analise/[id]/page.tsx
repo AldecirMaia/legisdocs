@@ -39,7 +39,7 @@ export default function AnalisarDocumento({ params }: { params: Promise<{ id: st
 
   const carregarDocumento = async (id: string) => {
     try {
-      const res = await fetch(${`process.env.NEXT_PUBLIC_API_URL}/document/detalhe/${id}`);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/document/detalhe/${id}`);
       const data = await res.json();
       setDoc(data);
     } catch (error) {
@@ -61,7 +61,7 @@ export default function AnalisarDocumento({ params }: { params: Promise<{ id: st
     let finalStatus = actionType === "APROVAR" ? "APROVADO" : actionType;
 
     try {
-      await fetch(${`process.env.NEXT_PUBLIC_API_URL}/document/${docId}/status`, {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/document/${docId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         // Correção: enviamos as duas variações para garantir que a API apanha o texto 

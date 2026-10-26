@@ -91,7 +91,7 @@ function SecretariaDashboard({ tenantId }: { tenantId: string }) {
   useEffect(() => {
     const fetchFila = async () => {
       try {
-        const res = await fetch(${`process.env.NEXT_PUBLIC_API_URL}/document/fila/${tenantId}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/document/fila/${tenantId}`);
         const data = await res.json();
         setPendentesCount(data.length || 0);
       } catch (error) {

@@ -71,7 +71,7 @@ export default function PautaSessao() {
 
   const carregarConfiguracoes = async (tenantId: string) => {
     try {
-      const res = await fetch(${`process.env.NEXT_PUBLIC_API_URL}/tenant/${tenantId}`);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tenant/${tenantId}`);
       if (res.ok) {
         const data = await res.json();
         setConfig({
@@ -87,7 +87,7 @@ export default function PautaSessao() {
 
   const carregarPauta = async (tenantId: string) => {
     try {
-      const res = await fetch(${`process.env.NEXT_PUBLIC_API_URL}/document/aprovados/${tenantId}`);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/document/aprovados/${tenantId}`);
       const data = await res.json();
       const docsValidos: DocPauta[] = Array.isArray(data) ? data : [];
       setTodosDocumentos(docsValidos);

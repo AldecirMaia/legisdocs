@@ -19,7 +19,7 @@ export default function GestaoGabinetes() {
 
   const carregarGabinetes = async (tenantId: string) => {
     try {
-      const res = await fetch(${`process.env.NEXT_PUBLIC_API_URL}/gabinete/list/${tenantId}`);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/gabinete/list/${tenantId}`);
       const data = await res.json();
       setGabinetes(data);
     } catch (error) {
@@ -50,7 +50,7 @@ export default function GestaoGabinetes() {
   // Função para Inativar/Reativar
   const handleToggleStatus = async (id: string, currentStatus: boolean) => {
     try {
-      await fetch(${`process.env.NEXT_PUBLIC_API_URL}/gabinete/${id}/status`, {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/gabinete/${id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: !currentStatus }),
