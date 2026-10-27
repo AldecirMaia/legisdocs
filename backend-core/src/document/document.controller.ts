@@ -46,4 +46,8 @@ export class DocumentController {
   updateDocument(@Param('id') id: string, @Body() body: any) {
     return this.documentService.updateDocument(id, body);
   }
+  @Get('aprovados-secretaria/:tenantId')
+  async getAprovadosSecretaria(@Param('tenantId') tenantId: string) {
+    return this.documentService.findAprovadosSecretaria(tenantId);
+  }
 }

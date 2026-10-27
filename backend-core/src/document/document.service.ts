@@ -136,4 +136,22 @@ async findAprovados(tenantId: string) {
       },
     });
   }
+  async findAprovadosSecretaria(tenantId: string) {
+    return await prisma.document.findMany({
+      where: {
+        tenantId,
+        status: 'APROVADO',
+      },
+      include: {
+        gabinete: {
+          select: {
+            name: true, // Conforme visto nos outros métodos do seu service, o campo correto na tabela é 'name' e não 'nome'
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
 }
