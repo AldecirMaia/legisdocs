@@ -6,7 +6,6 @@ import "react-quill-new/dist/quill.snow.css";
 
 const ReactQuill = dynamic(() => import("react-quill-new"), { ssr: false });
 
-// Interfaces TypeScript para evitar o uso de "any"
 interface UserAuth {
   id: string;
   name: string;
@@ -90,13 +89,19 @@ export default function NovoDocumento() {
     ],
   };
 
-  const handleSubmit = async (status: "RASCUNHO" | "ENVIADO") => {
+  const handleSubmit = async (intendedStatus: "RASCUNHO" | "ENVIADO") => {
     if (!ementa.trim()) return showToast("O campo inicial é obrigatório.", "error");
     if (!user) return;
     setLoading(true);
 
+    // REGRA DE NEGÓCIO: Se for assessor e tentar "Enviar", o status muda para aguardar assinatura
+    let finalStatus = intendedStatus;
+    if (intendedStatus === "ENVIADO" && user.role === "ASSESSOR") {
+      finalStatus = "AGUARDANDO_ASSINATURA";
+    }
+
     const payload = {
-      type: tipo, status, ementa, motivo: mostrarMotivo ? motivo : "", justificativa,
+      type: tipo, status: finalStatus, ementa, motivo: mostrarMotivo ? motivo : "", justificativa,
       secretariaDestino: mostrarSecretaria ? (isOutros ? customNomeSecretaria : secretariaEncontrada?.nome) : "",
       nomeSecretario: mostrarSecretaria ? (isOutros ? customNomeTitular : secretariaEncontrada?.titular) : "",
       tenantId: user.tenantId, gabineteId: user.gabineteId, authorId: user.id
@@ -107,7 +112,12 @@ export default function NovoDocumento() {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
-      showToast(status === "ENVIADO" ? "Enviado com sucesso!" : "Rascunho guardado.", "success");
+      
+      let successMessage = "Rascunho guardado.";
+      if (finalStatus === "ENVIADO") successMessage = "Enviado com sucesso para a Secretaria!";
+      if (finalStatus === "AGUARDANDO_ASSINATURA") successMessage = "Enviado para assinatura do Vereador!";
+      
+      showToast(successMessage, "success");
       setTimeout(() => router.push("/painel/documentos"), 2000);
     } catch {
       showToast("Erro ao gravar documento.", "error");
@@ -143,7 +153,6 @@ export default function NovoDocumento() {
               <select 
                 value={tipo} 
                 onChange={(e) => setTipo(e.target.value)} 
-                // text-gray-900 aplicado para forçar texto preto no select
                 className="w-full border border-gray-300 rounded-lg p-3 font-semibold bg-gray-50 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               >
                 <option value="INDICACAO">Indicação Parlamentar</option>
@@ -167,7 +176,6 @@ export default function NovoDocumento() {
                 value={ementa} 
                 onChange={(e) => setEmenta(e.target.value)} 
                 placeholder={labels.placeholderEmenta} 
-                // text-gray-900 aplicado para forçar texto preto na textarea
                 className="w-full border border-gray-300 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none placeholder-gray-400" 
               />
             </div>
@@ -240,8 +248,12 @@ export default function NovoDocumento() {
             </div>
             
             <div className="flex flex-col sm:flex-row gap-3 pt-6">
-              <button disabled={loading} onClick={() => handleSubmit("RASCUNHO")} className="flex-1 bg-white border-2 border-gray-300 text-gray-800 hover:bg-gray-50 font-bold py-3 rounded-lg">💾 Guardar como Rascunho</button>
-              <button disabled={loading} onClick={() => handleSubmit("ENVIADO")} className="flex-1 bg-green-600 text-white hover:bg-green-700 font-bold py-3 rounded-lg shadow-md">🚀 Enviar para a Secretaria</button>
+              <button disabled={loading} onClick={() => handleSubmit("RASCUNHO")} className="flex-1 bg-white border-2 border-gray-300 text-gray-800 hover:bg-gray-50 font-bold py-3 rounded-lg">
+                💾 Guardar como Rascunho
+              </button>
+              <button disabled={loading} onClick={() => handleSubmit("ENVIADO")} className="flex-1 bg-green-600 text-white hover:bg-green-700 font-bold py-3 rounded-lg shadow-md">
+                {user.role === "ASSESSOR" ? "✍️ Enviar para Assinar" : "🚀 Enviar para a Secretaria"}
+              </button>
             </div>
           </div>
         </div>

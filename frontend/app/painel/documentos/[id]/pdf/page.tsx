@@ -43,6 +43,11 @@ export default function DocumentoPDF({ params }: { params: Promise<{ id: string 
 
   const nomeCidade = tenant?.cidadeEstado ? tenant.cidadeEstado.split('-')[0] : "Baraúna";
 
+  // Regra de Negócio: Assinatura é sempre do Titular do Gabinete
+  const vereadorTitular = doc.gabinete?.users?.[0];
+  const nomeAssinatura = vereadorTitular?.name || doc.author?.name;
+  const partidoAssinatura = vereadorTitular?.partido || doc.author?.partido;
+
   return (
     <div className="min-h-screen bg-gray-200 py-8 flex flex-col items-center print:py-0 print:p-0 print:m-0 print:bg-white print:block">
       
@@ -194,10 +199,10 @@ export default function DocumentoPDF({ params }: { params: Promise<{ id: string 
 
             <div className="text-center flex flex-col items-center mt-6">
               <div className="w-64 border-t border-black pt-2 mb-1">
-                <p className="font-bold uppercase tracking-wider text-[13px]">{doc.author?.name}</p>
+                <p className="font-bold uppercase tracking-wider text-[13px]">{nomeAssinatura}</p>
               </div>
               <p className="text-[12px] uppercase font-semibold">
-                {doc.type === "PARECER" ? "VEREADOR(A) RELATOR(A)" : `VEREADOR(A) ${doc.author?.partido ? `- ${doc.author.partido}` : ""}`}
+                {doc.type === "PARECER" ? "VEREADOR(A) RELATOR(A)" : `VEREADOR(A) ${partidoAssinatura ? `- ${partidoAssinatura}` : ""}`}
               </p>
             </div>
           </div>

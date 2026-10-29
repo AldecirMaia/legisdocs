@@ -133,11 +133,21 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
     ],
   };
 
-  const handleUpdate = async (novoStatus: "RASCUNHO" | "ENVIADO") => {
+  const handleUpdate = async (intendedStatus: "RASCUNHO" | "ENVIADO") => {
     if (!ementa.trim()) return showToast("A ementa é obrigatória.", "error");
+    if (!user) return;
+    
     setSaving(true);
+    
+    // Regra de Negócio: Se o Assessor clica em Enviar, volta para Assinatura do Vereador
+    let finalStatus = intendedStatus;
+    if (intendedStatus === "ENVIADO" && user.role === "ASSESSOR") {
+      finalStatus = "AGUARDANDO_ASSINATURA";
+    }
+
     const payload = {
-      status: novoStatus, 
+      status: finalStatus, 
+      editorId: user.id, // Informação crucial para o backend saber quem está a editar
       ementa, 
       motivo: mostrarMotivo ? motivo : "", 
       justificativa,
@@ -153,7 +163,12 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
       });
 
       if (!res.ok) throw new Error();
-      showToast(novoStatus === "ENVIADO" ? "Reenviado para análise!" : "Rascunho atualizado!", "success");
+      
+      let successMessage = "Rascunho atualizado!";
+      if (finalStatus === "ENVIADO") successMessage = "Reenviado para análise!";
+      if (finalStatus === "AGUARDANDO_ASSINATURA") successMessage = "Enviado para assinatura do Vereador!";
+      
+      showToast(successMessage, "success");
       setTimeout(() => router.push("/painel/documentos"), 2000);
     } catch (error) {
       showToast("Erro ao guardar documento.", "error");
@@ -163,7 +178,6 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
 
   if (loading || !user || !docOriginal) return <div className="p-10 text-gray-500 animate-pulse">A carregar documento...</div>;
 
-  // Lógica para puxar o motivo com segurança, prevenindo espaços vazios de API's antigas
   const motivoDevolucao = docOriginal.feedbackSecretaria || docOriginal.feedback || "Motivo não especificado. Entre em contacto com a secretaria.";
 
   return (
@@ -264,7 +278,7 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
                   💾 Atualizar Rascunho
                 </button>
                 <button disabled={saving} onClick={() => handleUpdate("ENVIADO")} className="flex-1 bg-green-600 text-white hover:bg-green-700 font-bold py-3 px-6 rounded-lg shadow-md disabled:opacity-50">
-                  {saving ? "A processar..." : "🚀 Reenviar para a Secretaria"}
+                  {saving ? "A processar..." : (user.role === "ASSESSOR" ? "✍️ Enviar para Assinar" : "🚀 Reenviar para a Secretaria")}
                 </button>
               </div>
             )}

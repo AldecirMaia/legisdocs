@@ -52,9 +52,37 @@ export default function MeusDocumentos() {
     }
   };
 
+  // Função disparada quando o Vereador clica em "Assinar e Enviar"
+  const handleAssinarDocumento = async (id: string) => {
+    if (!confirm("Confirmar a assinatura digital e envio deste documento para a Secretaria?")) return;
+    
+    try {
+      const token = localStorage.getItem("legisdocs_token");
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/document/${id}/status`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: 'ENVIADO' }),
+      });
+
+      if (res.ok) {
+        alert("Documento assinado e enviado com sucesso!");
+        if (user) carregarDocumentos(user.gabineteId);
+      } else {
+        alert("Erro ao assinar o documento.");
+      }
+    } catch (error) {
+      console.error("Erro ao assinar:", error);
+    }
+  };
+
+  // Adicionado o badge amarelo para "AGUARDANDO_ASSINATURA"
   const getStatusBadge = (status: string) => {
     const badges: Record<string, string> = {
       RASCUNHO: "bg-gray-100 text-gray-700 border-gray-300",
+      AGUARDANDO_ASSINATURA: "bg-yellow-100 text-yellow-800 border-yellow-300",
       ENVIADO: "bg-blue-100 text-blue-700 border-blue-300",
       REFAZER: "bg-orange-100 text-orange-700 border-orange-300",
       CANCELADO: "bg-red-100 text-red-700 border-red-300",
@@ -111,7 +139,7 @@ export default function MeusDocumentos() {
                         {doc.protocolNum > 0 ? `${doc.type} Nº ${String(doc.protocolNum).padStart(3, '0')}/${doc.year}` : `${doc.type} (Sem Número)`}
                       </span>
                       <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${getStatusBadge(doc.status)}`}>
-                        {doc.status}
+                        {doc.status.replace('_', ' ')}
                       </span>
                     </div>
                     <p className="text-gray-800 font-medium line-clamp-2 mt-1">{doc.ementa}</p>
@@ -135,7 +163,8 @@ export default function MeusDocumentos() {
                   </div>
                   
                   <div className="flex flex-wrap gap-2 sm:mt-0 mt-2">
-                    {doc.status === "RASCUNHO" || doc.status === "REFAZER" ? (
+                    {/* O Assessor pode continuar a edição enquanto aguarda assinatura. O Vereador apenas visualiza antes de assinar. */}
+                    {doc.status === "RASCUNHO" || doc.status === "REFAZER" || (doc.status === "AGUARDANDO_ASSINATURA" && user.role === "ASSESSOR") ? (
                       <Link href={`/painel/documentos/${doc.id}`} className="bg-white border border-gray-300 text-gray-900 hover:bg-gray-100 font-semibold text-sm px-4 py-2 rounded-lg transition-colors text-center">
                         Continuar Edição
                       </Link>
@@ -143,6 +172,16 @@ export default function MeusDocumentos() {
                       <Link href={`/painel/documentos/${doc.id}`} className="bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold text-sm px-4 py-2 rounded-lg transition-colors text-center">
                         Visualizar
                       </Link>
+                    )}
+
+                    {/* Botão exclusivo do Vereador para assinar e mandar para a secretaria */}
+                    {doc.status === "AGUARDANDO_ASSINATURA" && user.role === "VEREADOR" && (
+                      <button 
+                        onClick={() => handleAssinarDocumento(doc.id)} 
+                        className="bg-yellow-500 text-yellow-900 hover:bg-yellow-600 font-bold text-sm px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm"
+                      >
+                        ✍️ Assinar e Enviar
+                      </button>
                     )}
 
                     {doc.status === "APROVADO" && (

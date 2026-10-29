@@ -21,26 +21,34 @@ export class DocumentService {
   }) {
     const currentYear = new Date().getFullYear();
 
-    // 1. Pega todos os protocolos válidos (maiores que 0) deste ano e tipo
+    // 1. Pega todos os protocolos válidos
     const allDocs = await prisma.document.findMany({
       where: { 
         tenantId: data.tenantId, 
         year: currentYear,
         type: data.type,
-        protocolNum: { gt: 0 } // Ignora os documentos cancelados
+        protocolNum: { gt: 0 } 
       },
       select: { protocolNum: true },
       orderBy: { protocolNum: 'asc' },
     });
 
-    // 2. Lógica para preencher buracos (Gaps) deixados por cancelamentos
+    // 2. Preenche buracos
     let nextProtocolNum = 1;
     for (const doc of allDocs) {
       if (doc.protocolNum === nextProtocolNum) {
         nextProtocolNum++;
       } else if (doc.protocolNum > nextProtocolNum) {
-        break; // Achámos um buraco! O número 'nextProtocolNum' está livre.
+        break; 
       }
+    }
+
+    // 3. Regra de Negócio Corrigida: Só aplica a trava se NÃO for Rascunho
+    const author = await prisma.user.findUnique({ where: { id: data.authorId } });
+    let finalStatus = data.status;
+    
+    if (data.status !== 'RASCUNHO') {
+      finalStatus = author?.role === 'VEREADOR' ? 'ENVIADO' : 'AGUARDANDO_ASSINATURA';
     }
 
     return await prisma.document.create({
@@ -48,7 +56,7 @@ export class DocumentService {
         protocolNum: nextProtocolNum,
         year: currentYear,
         type: data.type,
-        status: data.status,
+        status: finalStatus, 
         ementa: data.ementa,
         content: data.content || '', 
         motivo: data.motivo,
@@ -101,7 +109,16 @@ async findAprovados(tenantId: string) {
       where: { id },
       include: {
         author: { select: { name: true, role: true, partido: true } },
-        gabinete: { select: { name: true } }
+        gabinete: { 
+          select: { 
+            name: true,
+            // Esta inclusão é obrigatória para a assinatura do PDF funcionar
+            users: {
+              where: { role: 'VEREADOR' },
+              select: { name: true, partido: true }
+            }
+          } 
+        }
       }
     });
   }

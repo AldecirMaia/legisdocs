@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Param } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, Patch } from '@nestjs/common';
 import { UserService } from './user.service';
 import { Role } from '@prisma/client';
 
@@ -14,5 +14,9 @@ export class UserController {
   @Get('gabinete/:gabineteId')
   findByGabinete(@Param('gabineteId') gabineteId: string) {
     return this.userService.findByGabinete(gabineteId);
+  }
+  @Patch('edit/:id')
+  async updateUser(@Param('id') id: string, @Body() body: any) {
+    return this.userService.updateUser(id, body);
   }
 }

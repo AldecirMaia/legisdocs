@@ -34,4 +34,14 @@ export class UserService {
       orderBy: { name: 'asc' }
     });
   }
+  async updateUser(id: string, data: { name?: string; email?: string; role?: string; password?: string }) {
+    const updateData: any = { ...data };
+    
+    if (!data.password) delete updateData.password;
+
+    return await prisma.user.update({
+      where: { id },
+      data: updateData,
+    });
+  }
 }

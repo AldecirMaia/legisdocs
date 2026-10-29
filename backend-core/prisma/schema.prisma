@@ -30,6 +30,7 @@ enum DocumentType {
 enum DocumentStatus {
     RASCUNHO
     ENVIADO
+    AGUARDANDO_ASSINATURA
     REFAZER
     CANCELADO
     APROVADO
