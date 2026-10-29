@@ -39,6 +39,8 @@ interface DocData {
   [key: string]: unknown;
 }
 
+type StatusDocumento = "RASCUNHO" | "ENVIADO" | "AGUARDANDO_ASSINATURA";
+
 export default function EditarDocumento({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const [docId, setDocId] = useState<string>("");
@@ -139,15 +141,15 @@ export default function EditarDocumento({ params }: { params: Promise<{ id: stri
     
     setSaving(true);
     
-    // Regra de Negócio: Se o Assessor clica em Enviar, volta para Assinatura do Vereador
-    let finalStatus = intendedStatus;
+    // Tipagem explícita para evitar o erro do TypeScript
+    let finalStatus: StatusDocumento = intendedStatus;
     if (intendedStatus === "ENVIADO" && user.role === "ASSESSOR") {
       finalStatus = "AGUARDANDO_ASSINATURA";
     }
 
     const payload = {
       status: finalStatus, 
-      editorId: user.id, // Informação crucial para o backend saber quem está a editar
+      editorId: user.id,
       ementa, 
       motivo: mostrarMotivo ? motivo : "", 
       justificativa,

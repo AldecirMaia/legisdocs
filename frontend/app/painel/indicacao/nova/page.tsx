@@ -22,6 +22,8 @@ interface Secretaria {
   [key: string]: unknown;
 }
 
+type StatusDocumento = "RASCUNHO" | "ENVIADO" | "AGUARDANDO_ASSINATURA";
+
 export default function NovoDocumento() {
   const router = useRouter();
   const [user, setUser] = useState<UserAuth | null>(null);
@@ -94,8 +96,8 @@ export default function NovoDocumento() {
     if (!user) return;
     setLoading(true);
 
-    // REGRA DE NEGÓCIO: Se for assessor e tentar "Enviar", o status muda para aguardar assinatura
-    let finalStatus = intendedStatus;
+    // Tipagem explícita para evitar o erro do TypeScript
+    let finalStatus: StatusDocumento = intendedStatus;
     if (intendedStatus === "ENVIADO" && user.role === "ASSESSOR") {
       finalStatus = "AGUARDANDO_ASSINATURA";
     }
@@ -147,7 +149,6 @@ export default function NovoDocumento() {
           </div>
           <div className="p-6 sm:p-8 space-y-6">
             
-            {/* TIPO DE DOCUMENTO */}
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">Tipo de Documento</label>
               <select 
@@ -167,7 +168,6 @@ export default function NovoDocumento() {
             
             <hr className="border-gray-200" />
             
-            {/* EMENTA */}
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">{labels.ementa}</label>
               <textarea 
@@ -180,7 +180,6 @@ export default function NovoDocumento() {
               />
             </div>
             
-            {/* SECRETARIA */}
             {mostrarSecretaria && (
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                 <label className="block text-sm font-bold text-gray-700 mb-2">Secretaria / Órgão</label>
@@ -218,7 +217,6 @@ export default function NovoDocumento() {
               </div>
             )}
             
-            {/* MOTIVO */}
             {mostrarMotivo && (
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Motivo</label>
@@ -231,7 +229,6 @@ export default function NovoDocumento() {
               </div>
             )}
             
-            {/* CONTEÚDO (QUILL) */}
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">{labels.conteudo}</label>
               
