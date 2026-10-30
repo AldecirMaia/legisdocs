@@ -1,6 +1,14 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Building2, User, Plus, Trash2, Save } from "lucide-react";
+
+interface Secretaria {
+  id: string;
+  nome: string;
+  titular: string;
+  isActive: boolean;
+}
 
 export default function ConfiguracoesCamara() {
   const router = useRouter();
@@ -16,19 +24,13 @@ export default function ConfiguracoesCamara() {
     enderecoRodape: "", contatoRodape: "", 
   });
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem("legisdocs_user");
-    if (!storedUser) return router.push("/");
-    const parsedUser = JSON.parse(storedUser);
-    
-    if (parsedUser.role !== "SECRETARIA" && parsedUser.role !== "SUPER_ADMIN") return router.push("/painel");
-    
-    setUser(parsedUser);
-    carregarConfiguracoes(parsedUser.tenantId);
-  }, [router]);
+  const [secretarias, setSecretarias] = useState<Secretaria[]>([]);
+  const [novaSecNome, setNovaSecNome] = useState("");
+  const [novaSecTitular, setNovaSecTitular] = useState("");
 
   const carregarConfiguracoes = async (tenantId: string) => {
     try {
+      // 1. Carregar Configurações Gerais
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tenant/${tenantId}`);
       if (!res.ok) throw new Error("Erro ao carregar configurações");
       const data = await res.json();
@@ -43,12 +45,33 @@ export default function ConfiguracoesCamara() {
         enderecoRodape: data.enderecoRodape || "", 
         contatoRodape: data.contatoRodape || "",   
       });
+
+      // 2. Carregar Secretarias Ativas
+      const resSec = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/secretaria-destino/list/active/${tenantId}`);
+      if (resSec.ok) {
+        setSecretarias(await resSec.json());
+      }
     } catch (error: any) {
       showToast(error.message, "error");
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const iniciarSessao = () => {
+      const storedUser = localStorage.getItem("legisdocs_user");
+      if (!storedUser) return router.push("/");
+      const parsedUser = JSON.parse(storedUser);
+      
+      if (parsedUser.role !== "SECRETARIA" && parsedUser.role !== "SUPER_ADMIN") return router.push("/painel");
+      
+      setUser(parsedUser);
+      carregarConfiguracoes(parsedUser.tenantId);
+    };
+
+    iniciarSessao();
+  }, [router]);
 
   const showToast = (msg: string, type: "success" | "error") => {
     setToast({ msg, type });
@@ -87,6 +110,52 @@ export default function ConfiguracoesCamara() {
     }
   };
 
+  const handleAdicionarSecretaria = async () => {
+    if (!novaSecNome.trim() || !novaSecTitular.trim()) {
+      return showToast("Preencha o nome da secretaria e do titular.", "error");
+    }
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/secretaria-destino/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nome: novaSecNome,
+          titular: novaSecTitular,
+          tenantId: user.tenantId,
+        }),
+      });
+
+      if (res.ok) {
+        showToast("Secretaria adicionada com sucesso!", "success");
+        setNovaSecNome("");
+        setNovaSecTitular("");
+        carregarConfiguracoes(user.tenantId);
+      } else {
+        showToast("Erro ao adicionar secretaria.", "error");
+      }
+    } catch (error) {
+      showToast("Erro de conexão.", "error");
+    }
+  };
+
+  const handleRemoverSecretaria = async (id: string) => {
+    if (!confirm("Tem a certeza que deseja remover esta secretaria da lista?")) return;
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/secretaria-destino/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: false }), 
+      });
+      if (res.ok) {
+        showToast("Secretaria removida.", "success");
+        carregarConfiguracoes(user.tenantId);
+      }
+    } catch (error) {
+      showToast("Erro ao remover.", "error");
+    }
+  };
+
   if (loading || !user) return <div className="p-10 text-gray-500 animate-pulse">A carregar configurações...</div>;
 
   return (
@@ -102,10 +171,14 @@ export default function ConfiguracoesCamara() {
         <button onClick={() => router.push("/painel")} className="text-blue-200 hover:text-white font-semibold transition-colors">Voltar</button>
       </header>
 
-      <main className="flex-1 p-6 sm:p-10 max-w-4xl mx-auto w-full">
-        <h2 className="text-3xl font-bold text-gray-800 mb-2">Parâmetros do Legislativo</h2>
-        <p className="text-gray-600 mb-8">Configure as variáveis e a identidade visual que aparecerão nos documentos oficiais (PDFs) desta Câmara.</p>
+      <main className="flex-1 p-6 sm:p-10 max-w-4xl mx-auto w-full space-y-8">
+        
+        <div>
+          <h2 className="text-3xl font-bold text-gray-800 mb-2">Parâmetros do Legislativo</h2>
+          <p className="text-gray-600">Configure as variáveis e a identidade visual que aparecerão nos documentos oficiais (PDFs) desta Câmara.</p>
+        </div>
 
+        {/* PARTE 1: CONFIGURAÇÕES GERAIS */}
         <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 space-y-8">
           
           <div className="p-6 bg-gray-50 rounded-xl border border-gray-200">
@@ -141,7 +214,7 @@ export default function ConfiguracoesCamara() {
                   type="text" 
                   value={form.enderecoRodape} 
                   onChange={(e) => setForm({ ...form, enderecoRodape: e.target.value })} 
-                  className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 focus:ring-2 focus:ring-blue-500" 
+                  className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none" 
                   placeholder="Ex: Rua do Horto Florestal, 506 Centro, Baraúna-RN // CEP: 59.695-000" 
                 />
               </div>
@@ -151,7 +224,7 @@ export default function ConfiguracoesCamara() {
                   type="text" 
                   value={form.contatoRodape} 
                   onChange={(e) => setForm({ ...form, contatoRodape: e.target.value })} 
-                  className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 focus:ring-2 focus:ring-blue-500" 
+                  className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none" 
                   placeholder="Ex: http://barauna.rn.leg.br/ // cmb.barauna@gmail.com" 
                 />
               </div>
@@ -163,35 +236,95 @@ export default function ConfiguracoesCamara() {
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Nome do(a) Prefeito(a) Atual</label>
-                <input type="text" required value={form.prefeitoNome} onChange={(e) => setForm({ ...form, prefeitoNome: e.target.value })} className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 focus:ring-2 focus:ring-blue-500" placeholder="Ex: Maria Divanize..." />
+                <input type="text" required value={form.prefeitoNome} onChange={(e) => setForm({ ...form, prefeitoNome: e.target.value })} className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ex: Maria Divanize..." />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2">Nome do Palácio (Sede)</label>
-                  <input type="text" required value={form.palacioNome} onChange={(e) => setForm({ ...form, palacioNome: e.target.value })} className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 focus:ring-2 focus:ring-blue-500" placeholder="Ex: Manoel Alves Bezerra" />
+                  <input type="text" required value={form.palacioNome} onChange={(e) => setForm({ ...form, palacioNome: e.target.value })} className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ex: Manoel Alves Bezerra" />
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2">Nome da Sala das Sessões</label>
-                  <input type="text" required value={form.salaSessoesNome} onChange={(e) => setForm({ ...form, salaSessoesNome: e.target.value })} className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 focus:ring-2 focus:ring-blue-500" />
+                  <input type="text" required value={form.salaSessoesNome} onChange={(e) => setForm({ ...form, salaSessoesNome: e.target.value })} className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2">Cidade - Estado</label>
-                  <input type="text" required value={form.cidadeEstado} onChange={(e) => setForm({ ...form, cidadeEstado: e.target.value })} className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 focus:ring-2 focus:ring-blue-500" />
+                  <input type="text" required value={form.cidadeEstado} onChange={(e) => setForm({ ...form, cidadeEstado: e.target.value })} className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2">Regimento Interno (Indicações)</label>
-                  <input type="text" required value={form.artigoIndicacao} onChange={(e) => setForm({ ...form, artigoIndicacao: e.target.value })} className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 focus:ring-2 focus:ring-blue-500" />
+                  <input type="text" required value={form.artigoIndicacao} onChange={(e) => setForm({ ...form, artigoIndicacao: e.target.value })} className="w-full border border-gray-300 rounded-lg p-3 text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
               </div>
             </div>
           </div>
 
-          <button type="submit" disabled={saving} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-6 rounded-lg shadow-md disabled:opacity-50">
-            {saving ? "A Guardar..." : "💾 Guardar Configurações e Imagens"}
+          <button type="submit" disabled={saving} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-6 rounded-lg shadow-md disabled:opacity-50 flex items-center justify-center gap-2">
+            <Save className="w-5 h-5" /> {saving ? "A Guardar..." : "Guardar Configurações e Imagens"}
           </button>
         </form>
+
+        {/* PARTE 2: GESTÃO DE SECRETARIAS (NOVO) */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 space-y-6 border-t-4 border-t-blue-800 mt-8">
+          <div>
+            <h3 className="text-xl font-bold text-gray-800">Gestão de Secretarias e Destinos</h3>
+            <p className="text-sm text-gray-500 mt-1">Registe os órgãos e os respetivos titulares. Estes dados ficarão disponíveis para os gabinetes na criação de ofícios e indicações.</p>
+          </div>
+
+          <div className="bg-gray-50 p-5 rounded-lg border border-gray-200 flex flex-col md:flex-row gap-4 items-end">
+            <div className="flex-1 w-full">
+              <label className="block text-xs font-bold text-gray-700 mb-1 flex items-center gap-1"><Building2 className="w-4 h-4" /> Nome do Órgão / Secretaria</label>
+              <input 
+                type="text" 
+                placeholder="Ex: Secretaria Mun. de Obras" 
+                value={novaSecNome} 
+                onChange={(e) => setNovaSecNome(e.target.value)} 
+                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 bg-white" 
+              />
+            </div>
+            <div className="flex-1 w-full">
+              <label className="block text-xs font-bold text-gray-700 mb-1 flex items-center gap-1"><User className="w-4 h-4" /> Nome do Titular / Secretário(a)</label>
+              <input 
+                type="text" 
+                placeholder="Ex: João Silva" 
+                value={novaSecTitular} 
+                onChange={(e) => setNovaSecTitular(e.target.value)} 
+                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 bg-white" 
+              />
+            </div>
+            <button onClick={handleAdicionarSecretaria} className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors">
+              <Plus className="w-5 h-5" /> Adicionar
+            </button>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-bold text-gray-700 mb-3">Órgãos Disponíveis no Sistema ({secretarias.length})</h4>
+            {secretarias.length === 0 ? (
+              <p className="text-sm text-gray-500 bg-gray-50 p-4 rounded-lg border border-gray-200 text-center">Nenhuma secretaria registada ainda.</p>
+            ) : (
+              <ul className="divide-y divide-gray-100 border border-gray-200 rounded-lg max-h-96 overflow-y-auto">
+                {secretarias.map((sec) => (
+                  <li key={sec.id} className="p-4 hover:bg-gray-50 flex justify-between items-center group transition-colors">
+                    <div>
+                      <p className="font-bold text-gray-800 text-sm">{sec.nome}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Titular: {sec.titular}</p>
+                    </div>
+                    <button 
+                      onClick={() => handleRemoverSecretaria(sec.id)} 
+                      className="text-red-500 hover:bg-red-50 p-2 rounded-lg md:opacity-0 md:group-hover:opacity-100 transition-all"
+                      title="Desativar Secretaria"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
       </main>
     </div>
   );

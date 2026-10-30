@@ -169,14 +169,18 @@ export default function DocumentoPDF({ params }: { params: Promise<{ id: string 
               default: 
                 return (
                   <div className="text-[12px]">
-                    <h1 className="text-center font-bold text-[17px] mb-4 uppercase tracking-wide">INDICAÇÃO Nº {doc.protocolNum}/{doc.year}</h1>
+                    <h1 className="text-center font-bold text-[17px] mb-4 uppercase tracking-wide">
+                      INDICAÇÃO Nº {doc.protocolNum > 0 ? String(doc.protocolNum).padStart(3, '0') : "S/N"}/{doc.year}
+                    </h1>
                     <div className="ml-auto w-1/2 text-justify text-[13px] mb-4">
-                      <p>Indico à Exmª. Srª. Prefeita Municipal, <strong>{tenant?.prefeitoNome}</strong>, que encaminhe ao Sec. Mun. de <strong>{doc.secretariaDestino}</strong>, <strong>{doc.nomeSecretario}</strong>, {doc.ementa}</p>
+                      <p>
+                        Indico à Exmª. Srª. Prefeita Municipal, <strong>{tenant?.prefeitoNome}</strong>, que encaminhe ao(à) <strong>{doc.secretariaDestino}</strong>, titular <strong>{doc.nomeSecretario}</strong>, {doc.ementa}
+                      </p>
                     </div>
                     <p className="text-justify indent-10 mb-4">
-                      Apresento a Vossas Excelências, nos termos do {tenant?.artigoIndicacao}, a presente indicação, que após lida em Plenário seja encaminhada Exmª. Srª. Prefeita Municipal, <strong>{tenant?.prefeitoNome}</strong>, que encaminhe ao Sec. Mun. de <strong>{doc.secretariaDestino}</strong>, <strong>{doc.nomeSecretario}</strong>, {doc.ementa}
+                      Apresento a Vossas Excelências, nos termos do {tenant?.artigoIndicacao?.replace(/^nos termos do\s*/i, '')}, a presente indicação, que após lida em Plenário seja encaminhada à Exmª. Srª. Prefeita Municipal, <strong>{tenant?.prefeitoNome}</strong>, para que encaminhe ao(à) <strong>{doc.secretariaDestino}</strong>, titular <strong>{doc.nomeSecretario}</strong>, {doc.ementa}
                     </p>
-                    <h2 className="text-center font-bold text-[15px] mb-2 uppercase tracking-wider">JUSTIFICATIVA</h2>
+                    <h2 className="text-center font-bold text-[15px] mb-2 uppercase tracking-wider mt-6">JUSTIFICATIVA</h2>
                     <div className="text-justify leading-relaxed mb-6 html-content" dangerouslySetInnerHTML={{ __html: doc.justificativa || doc.motivo || "" }}></div>
                   </div>
                 );
@@ -197,20 +201,34 @@ export default function DocumentoPDF({ params }: { params: Promise<{ id: string 
               </p>
             )}
 
-            <div className="text-center flex flex-col items-center mt-6">
-              <div className="w-64 border-t border-black pt-2 mb-1">
-                <p className="font-bold uppercase tracking-wider text-[13px]">{nomeAssinatura}</p>
+            {/* Lógica Híbrida de Assinatura Eletrónica */}
+            {(doc.status === "ENVIADO" || doc.status === "APROVADO") ? (
+              <div className="mt-4 flex flex-col items-center justify-center border-[1.5px] border-blue-900 rounded py-2 px-4 w-64 mx-auto bg-blue-50 text-blue-900 break-inside-avoid print:border-black print:text-black print:bg-white">
+                <p className="text-[9px] uppercase font-bold tracking-widest">Assinatura Eletrónica</p>
+                <p className="font-bold text-[12px] uppercase mt-1">{nomeAssinatura}</p>
+                <p className="text-[9px] font-semibold">
+                  {doc.type === "PARECER" ? "VEREADOR(A) RELATOR(A)" : `VEREADOR(A) ${partidoAssinatura ? `- ${partidoAssinatura}` : ""}`}
+                </p>
+                <p className="text-[7px] mt-1 font-medium italic">
+                  Autenticado digitalmente via sistema.
+                </p>
               </div>
-              <p className="text-[12px] uppercase font-semibold">
-                {doc.type === "PARECER" ? "VEREADOR(A) RELATOR(A)" : `VEREADOR(A) ${partidoAssinatura ? `- ${partidoAssinatura}` : ""}`}
-              </p>
-            </div>
+            ) : (
+              <div className="text-center flex flex-col items-center mt-8 break-inside-avoid">
+                <div className="w-64 border-t border-black pt-2 mb-1">
+                  <p className="font-bold uppercase tracking-wider text-[13px]">{nomeAssinatura}</p>
+                </div>
+                <p className="text-[12px] uppercase font-semibold">
+                  {doc.type === "PARECER" ? "VEREADOR(A) RELATOR(A)" : `VEREADOR(A) ${partidoAssinatura ? `- ${partidoAssinatura}` : ""}`}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="w-full border-t-[1.5px] border-black pt-2 mt-6 text-center break-inside-avoid">
             <p className="font-bold text-[13px] uppercase">Palácio {tenant?.palacioNome}</p>
-            <p className="text-[11px] text-gray-800">{tenant?.enderecoRodape || "Rua do Horto Florestal, 506 Centro, Baraúna-RN // CEP: 59.695-000"}</p>
-            <p className="text-[11px] text-gray-800">{tenant?.contatoRodape || "http://barauna.rn.leg.br/ // cmb.barauna@gmail.com"}</p>
+            <p className="text-[11px] text-gray-800">{tenant?.enderecoRodape || "Morada não configurada nas definições da Secretaria"}</p>
+            <p className="text-[11px] text-gray-800">{tenant?.contatoRodape || "Contactos não configurados nas definições da Secretaria"}</p>
           </div>
 
         </div>

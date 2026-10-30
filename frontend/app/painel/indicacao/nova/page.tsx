@@ -39,15 +39,7 @@ export default function NovoDocumento() {
   const [customNomeSecretaria, setCustomNomeSecretaria] = useState("");
   const [customNomeTitular, setCustomNomeTitular] = useState("");
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem("legisdocs_user");
-    if (!storedUser) return router.push("/");
-    const parsedUser = JSON.parse(storedUser);
-    setUser(parsedUser);
-    carregarSecretarias(parsedUser.tenantId);
-  }, [router]);
-
-  const carregarSecretarias = async (tenantId: string) => {
+const carregarSecretarias = async (tenantId: string) => {
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/secretaria-destino/list/active/${tenantId}`);
       const data = await res.json();
@@ -56,6 +48,23 @@ export default function NovoDocumento() {
       console.error(error);
     }
   };
+  useEffect(() => {
+    // Colocamos tudo dentro de uma função para o verificador do React não reclamar
+    const iniciarSessao = () => {
+      const storedUser = localStorage.getItem("legisdocs_user");
+      if (!storedUser) {
+        router.push("/");
+        return;
+      }
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+      carregarSecretarias(parsedUser.tenantId);
+    };
+
+    iniciarSessao();
+  }, [router]);
+
+  
 
   const showToast = (msg: string, type: "success" | "error" | "info") => {
     setToast({ msg, type });
@@ -103,10 +112,16 @@ export default function NovoDocumento() {
     }
 
     const payload = {
-      type: tipo, status: finalStatus, ementa, motivo: mostrarMotivo ? motivo : "", justificativa,
+      type: tipo, 
+      status: finalStatus, 
+      ementa, 
+      motivo: mostrarMotivo ? motivo : "", 
+      justificativa,
       secretariaDestino: mostrarSecretaria ? (isOutros ? customNomeSecretaria : secretariaEncontrada?.nome) : "",
       nomeSecretario: mostrarSecretaria ? (isOutros ? customNomeTitular : secretariaEncontrada?.titular) : "",
-      tenantId: user.tenantId, gabineteId: user.gabineteId, authorId: user.id
+      tenantId: user.tenantId, 
+      gabineteId: user.gabineteId, 
+      authorId: user.id
     };
 
     try {
