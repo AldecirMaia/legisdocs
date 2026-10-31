@@ -35,3 +35,26 @@ body {
     print-color-adjust: exact;
   }
 }
+
+@layer base {
+
+  /* Força texto escuro e fundo branco em todos os campos do sistema */
+  input,
+  select,
+  textarea {
+    @apply text-gray-900 bg-white;
+  }
+
+  /* Define uma cor mais clara apenas para o texto de preenchimento (placeholder) */
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-gray-400;
+  }
+
+  /* Mantém os campos desativados com um aspeto visualmente distinto */
+  input:disabled,
+  select:disabled,
+  textarea:disabled {
+    @apply bg-gray-100 text-gray-500 cursor-not-allowed;
+  }
+}

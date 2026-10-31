@@ -18,6 +18,10 @@ interface DocPauta {
   year: number;
   ementa: string;
   author?: { name: string; partido?: string };
+  gabinete?: { 
+    name: string;
+    users?: { name: string; role: string }[];
+  };
   createdAt: string;
   updatedAt?: string;
 }
@@ -29,6 +33,9 @@ interface PautaItem {
   ementa: string;
   propositor: string;
   tramitacao: "LEITURA" | "VOTAÇÃO";
+  regime?: "NORMAL" | "URGENCIA";
+  fase?: "LEITURA" | "1_VOTACAO" | "2_VOTACAO" | "LEITURA_VOTACAO_UNICA";
+  turnoVotacao?: string; // Guarda a escolha do Modal
 }
 
 export default function PautaSessao() {
@@ -39,7 +46,6 @@ export default function PautaSessao() {
   const [itensPauta, setItensPauta] = useState<PautaItem[]>([]);
   
   const [config, setConfig] = useState<{ logoCabecalho: string; enderecoRodape: string; contatoRodape: string } | null>(null);
-  
   const [loading, setLoading] = useState(true);
 
   const [dataSessao, setDataSessao] = useState(""); 
@@ -51,23 +57,41 @@ export default function PautaSessao() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<PautaItem | null>(null);
   const [manualForm, setManualForm] = useState<PautaItem>({
-    id: "", type: "PROJETO DE LEI", numero: "000/2026", ementa: "", propositor: "", tramitacao: "LEITURA"
+    id: "", type: "PROJETO DE LEI", numero: "000/2026", ementa: "", propositor: "", tramitacao: "LEITURA", regime: "NORMAL", fase: "LEITURA"
   });
 
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
   const [dataImpressao, setDataImpressao] = useState("");
 
-  useEffect(() => {
-    setDataSessao(new Date().toLocaleDateString("pt-BR"));
-    const storedUser = localStorage.getItem("legisdocs_user");
-    if (!storedUser) return router.push("/");
-    const parsedUser = JSON.parse(storedUser);
-    if (parsedUser.role !== "SECRETARIA" && parsedUser.role !== "SUPER_ADMIN") return router.push("/painel");
-    setUser(parsedUser);
+  // Estados para o Modal de Turnos de Votação
+  const [showTurnoModal, setShowTurnoModal] = useState(false);
+  const [itensParaTurno, setItensParaTurno] = useState<PautaItem[]>([]);
+
+  const isProjetoLei = (tipo: string) => {
+    const t = tipo.toUpperCase();
+    return t.includes("LEI") || t.includes("EMENDA");
+  };
+
+ const formatToPautaItem = (doc: DocPauta): PautaItem => {
+    const typeFormatted = doc.type.replace("_", " ");
+    const isExpediente = ["INDICACAO", "OFICIO", "MOCAO"].includes(doc.type);
+    const isLei = isProjetoLei(typeFormatted);
     
-    carregarPauta(parsedUser.tenantId);
-    carregarConfiguracoes(parsedUser.tenantId);
-  }, [router]);
+    // Regra de Negócio: O autor oficial é sempre o Vereador (Titular do Gabinete)
+    const vereador = doc.gabinete?.users?.find(u => u.role === "VEREADOR");
+    const nomeGabineteFormatado = doc.gabinete?.name?.replace(/^Gabinete (do|da|de)?\s*/i, '');
+    const nomePropositor = vereador?.name || nomeGabineteFormatado || doc.author?.name || "N/A";
+    
+    return {
+      id: doc.id,
+      type: typeFormatted,
+      numero: `${String(doc.protocolNum).padStart(3, '0')}/${doc.year}`,
+      ementa: doc.ementa,
+      propositor: nomePropositor,
+      tramitacao: isExpediente || isLei ? "LEITURA" : "VOTAÇÃO",
+      ...(isLei && { regime: "NORMAL", fase: "LEITURA" })
+    };
+  };
 
   const carregarConfiguracoes = async (tenantId: string) => {
     try {
@@ -99,17 +123,19 @@ export default function PautaSessao() {
     }
   };
 
-  const formatToPautaItem = (doc: DocPauta): PautaItem => {
-    const isExpediente = ["INDICACAO", "OFICIO", "MOCAO"].includes(doc.type);
-    return {
-      id: doc.id,
-      type: doc.type.replace("_", " "),
-      numero: `${String(doc.protocolNum).padStart(3, '0')}/${doc.year}`,
-      ementa: doc.ementa,
-      propositor: doc.author?.name || "N/A",
-      tramitacao: isExpediente ? "LEITURA" : "VOTAÇÃO",
+  useEffect(() => {
+    const iniciar = () => {
+      setDataSessao(new Date().toLocaleDateString("pt-BR"));
+      const storedUser = localStorage.getItem("legisdocs_user");
+      if (!storedUser) return router.push("/");
+      const parsedUser = JSON.parse(storedUser);
+      if (parsedUser.role !== "SECRETARIA" && parsedUser.role !== "SUPER_ADMIN") return router.push("/painel");
+      setUser(parsedUser);
+      carregarPauta(parsedUser.tenantId);
+      carregarConfiguracoes(parsedUser.tenantId);
     };
-  };
+    iniciar();
+  }, [router]);
 
   const aplicarFiltroData = () => {
     if (!dataInicio || !dataFim) return alert("Por favor, preencha a Data Inicial e a Data Final.");
@@ -138,7 +164,7 @@ export default function PautaSessao() {
     const novoItem: PautaItem = { ...manualForm, id: "manual-" + Date.now() };
     setItensPauta(prev => [...prev, novoItem]);
     setShowAddManual(false);
-    setManualForm({ id: "", type: "PROJETO DE LEI", numero: "000/2026", ementa: "", propositor: "", tramitacao: "LEITURA" });
+    setManualForm({ id: "", type: "PROJETO DE LEI", numero: "000/2026", ementa: "", propositor: "", tramitacao: "LEITURA", regime: "NORMAL", fase: "LEITURA" });
   };
 
   const salvarEdicao = () => {
@@ -147,13 +173,27 @@ export default function PautaSessao() {
     setEditingId(null);
   };
 
-  const handleImprimir = () => {
+  // ==========================================
+  // LÓGICA DE IMPRESSÃO E MODAL DE TURNOS
+  // ==========================================
+  const iniciarImpressao = () => {
+    const votacoes = itensPauta.filter(i => i.tramitacao === "VOTAÇÃO");
+    
+    if (votacoes.length > 0) {
+      // Abre o modal obrigando a escolher o turno
+      setItensParaTurno(votacoes);
+      setShowTurnoModal(true);
+    } else {
+      // Se for só expediente, imprime direto
+      executarImpressao();
+    }
+  };
+
+  const executarImpressao = () => {
     const agora = new Date();
     const formatada = `${agora.toLocaleDateString("pt-BR")}, ${agora.toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' })}`;
     setDataImpressao(formatada);
-    setTimeout(() => {
-      window.print();
-    }, 100);
+    setTimeout(() => window.print(), 150);
   };
 
   const expediente = itensPauta.filter(i => i.tramitacao === "LEITURA");
@@ -164,8 +204,60 @@ export default function PautaSessao() {
   return (
     <div lang="pt-BR" className="min-h-screen bg-gray-50 print:bg-white flex flex-col pb-10">
       
+      {/* MODAL: DEFINIÇÃO DE TURNOS ANTES DE IMPRIMIR */}
+      {showTurnoModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 z-[100] flex items-center justify-center p-4 no-print animate-in fade-in">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-2xl w-full max-h-[90vh] flex flex-col">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Definir Turnos de Votação</h3>
+            <p className="text-gray-600 text-sm mb-6">Atenção: Existem projetos na Ordem do Dia. Defina em qual turno cada um se encontra para gerar a pauta oficial:</p>
+            
+            <div className="flex-1 overflow-y-auto space-y-4 mb-6 pr-2">
+              {itensParaTurno.map(item => (
+                <div key={item.id} className="p-4 border border-blue-200 rounded-lg bg-blue-50 flex flex-col md:flex-row gap-4 justify-between md:items-center">
+                  <div className="flex-1">
+                    <p className="font-bold text-sm text-gray-800">{item.type} Nº {item.numero}</p>
+                    <p className="text-xs text-gray-600 line-clamp-2 mt-1">{item.ementa}</p>
+                  </div>
+                  <div className="w-full md:w-48 shrink-0">
+                    <select
+                      className="w-full border border-blue-300 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 font-bold text-blue-900 bg-white shadow-sm"
+                      value={item.turnoVotacao || ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setItensParaTurno(prev => prev.map(i => i.id === item.id ? { ...i, turnoVotacao: val } : i));
+                        setItensPauta(prev => prev.map(i => i.id === item.id ? { ...i, turnoVotacao: val } : i));
+                      }}
+                    >
+                      <option value="">Selecione o Turno...</option>
+                      <option value="Votação Única">Votação Única</option>
+                      <option value="1ª Votação">1ª Votação</option>
+                      <option value="2ª Votação">2ª Votação</option>
+                    </select>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            <div className="flex gap-3 justify-end pt-4 border-t border-gray-100">
+              <button onClick={() => setShowTurnoModal(false)} className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg font-bold hover:bg-gray-300 transition-colors">Cancelar Impressão</button>
+              <button onClick={() => {
+                if (itensParaTurno.some(i => !i.turnoVotacao)) {
+                  alert("Por favor, selecione o turno de TODOS os projetos listados.");
+                  return;
+                }
+                setShowTurnoModal(false);
+                executarImpressao();
+              }} className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 flex items-center gap-2 transition-colors shadow-md">
+                🖨️ Confirmar e Imprimir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: REMOVER ITEM */}
       {itemToRemove && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 no-print animate-in fade-in">
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-[90] flex items-center justify-center p-4 no-print animate-in fade-in">
           <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full">
             <h3 className="text-lg font-bold text-gray-900 mb-2">Remover Documento</h3>
             <p className="text-gray-600 text-sm mb-6">Tem a certeza que deseja remover este documento da pauta de hoje?</p>
@@ -177,7 +269,7 @@ export default function PautaSessao() {
         </div>
       )}
 
-      {/* CSS Exclusivo para Impressão - Fundos brancos e margens reduzidas para 10mm */}
+      {/* CSS Exclusivo para Impressão */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
           @page { margin: 10mm 10mm; size: A4 portrait; }
@@ -221,7 +313,7 @@ export default function PautaSessao() {
             <h2 className="text-3xl font-bold text-gray-800">Construtor de Pauta</h2>
             <p className="text-gray-600 mt-1">Filtre por datas, remova, edite ou adicione itens manualmente antes de imprimir.</p>
           </div>
-          <button onClick={handleImprimir} className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg shadow-md transition-colors flex items-center justify-center gap-2">
+          <button onClick={iniciarImpressao} className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg shadow-md transition-colors flex items-center justify-center gap-2">
             🖨️ Imprimir Pauta Oficial
           </button>
         </div>
@@ -266,7 +358,7 @@ export default function PautaSessao() {
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Número/Ano</label><input type="text" value={manualForm.numero} onChange={(e) => setManualForm({...manualForm, numero: e.target.value})} placeholder="Ex: 001/2026" className="w-full border border-purple-300 rounded p-2 text-sm text-gray-900 outline-none" /></div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Autor</label><input type="text" value={manualForm.propositor} onChange={(e) => setManualForm({...manualForm, propositor: e.target.value.toUpperCase()})} placeholder="Nome do Autor" className="w-full border border-purple-300 rounded p-2 text-sm text-gray-900 outline-none" /></div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Tramitação</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Bloco da Pauta</label>
                   <select value={manualForm.tramitacao} onChange={(e) => setManualForm({...manualForm, tramitacao: e.target.value as "LEITURA" | "VOTAÇÃO"})} className="w-full border border-purple-300 rounded p-2 text-sm text-gray-900 outline-none">
                     <option value="LEITURA">LEITURA (Expediente)</option><option value="VOTAÇÃO">VOTAÇÃO (Ordem Dia)</option>
                   </select>
@@ -302,12 +394,13 @@ export default function PautaSessao() {
                       <div>
                         <div className="flex flex-wrap items-center gap-2 mb-1">
                           <span className="font-bold text-gray-800 text-sm">{index + 1}º) {item.type} Nº {item.numero}</span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${item.tramitacao === 'LEITURA' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>{item.tramitacao}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${item.tramitacao === 'LEITURA' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>{item.tramitacao === "LEITURA" ? "EXPEDIENTE" : "ORDEM DO DIA"}</span>
+                          {item.turnoVotacao && <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-green-100 text-green-800">{item.turnoVotacao}</span>}
                         </div>
                         <p className="text-sm text-gray-700 mb-1"><strong>Autor:</strong> {item.propositor}</p>
                         <p className="text-sm text-gray-600 line-clamp-2 italic">"{item.ementa}"</p>
                       </div>
-                      <div className="flex flex-row sm:flex-col gap-2 justify-center">
+                      <div className="flex flex-row sm:flex-col gap-2 justify-center shrink-0">
                         <button onClick={() => { setEditingId(item.id); setEditForm(item); }} className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-200 font-bold py-1.5 px-3 rounded text-xs shadow-sm w-full">✏️ Alterar</button>
                         <button onClick={() => confirmRemove(item.id)} className="bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 font-bold py-1.5 px-3 rounded text-xs shadow-sm w-full">🗑️ Remover</button>
                       </div>
@@ -383,7 +476,7 @@ export default function PautaSessao() {
                       {expediente.map((doc, index) => (
                         <div key={doc.id} className="page-break-avoid print-text-sm">
                           <p className="font-bold mb-0.5">{index + 1}°) {doc.type} N° {doc.numero}.</p>
-                          <p className="mb-0.5">Propositor: {doc.propositor.toUpperCase()}. Tramitação: {doc.tramitacao.toUpperCase()}</p>
+                          <p className="mb-0.5">Propositor: {doc.propositor.toUpperCase()}. Tramitação: <span className="underline">LEITURA NO EXPEDIENTE</span></p>
                           <p className="uppercase">RESUMO: {doc.ementa.toUpperCase()}</p>
                         </div>
                       ))}
@@ -400,7 +493,9 @@ export default function PautaSessao() {
                       {ordemDia.map((doc, index) => (
                         <div key={doc.id} className="page-break-avoid print-text-sm">
                           <p className="font-bold mb-0.5">{index + 1}°) {doc.type} N° {doc.numero}.</p>
-                          <p className="mb-0.5">Propositor: {doc.propositor.toUpperCase()}. Tramitação: {doc.tramitacao.toUpperCase()}</p>
+                          <p className="mb-0.5">
+                            Propositor: {doc.propositor.toUpperCase()}. Tramitação: <span className="font-bold underline">{doc.turnoVotacao ? doc.turnoVotacao.toUpperCase() : "VOTAÇÃO"} NA ORDEM DO DIA</span>
+                          </p>
                           <p className="uppercase">RESUMO: {doc.ementa.toUpperCase()}</p>
                         </div>
                       ))}

@@ -140,15 +140,15 @@ function GestaoEquipaGabinete({ params }: { params: Promise<{ id: string }> }) {
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
           <h3 className="font-bold text-gray-700 mb-4">Registar Novo Membro</h3>
-          <form onSubmit={handleAddUser} className="flex flex-col md:flex-row gap-4">
-            <input type="text" placeholder="Nome" value={newName} onChange={e => setNewName(e.target.value)} required className="flex-1 border border-gray-300 rounded-lg p-2" />
-            <input type="email" placeholder="Email" value={newEmail} onChange={e => setNewEmail(e.target.value)} required className="flex-1 border border-gray-300 rounded-lg p-2" />
+          <form onSubmit={handleAddUser} className="flex flex-col md:flex-row gap-2">
+            <input type="text" placeholder="Nome" value={newName} onChange={e => setNewName(e.target.value)} required className="flex-1 border border-gray-300 rounded-lg p-0.5" />
+            <input type="email" placeholder="Email" value={newEmail} onChange={e => setNewEmail(e.target.value)} required className="flex-1 border border-gray-300 rounded-lg p-0.5" />
             <input type="password" placeholder="••••••••" value={newPassword} onChange={e => setNewPassword(e.target.value)} required className="flex-1 border border-gray-300 rounded-lg p-2" />
             <select value={newRole} onChange={e => setNewRole(e.target.value)} className="border border-gray-300 rounded-lg p-2 bg-white">
               <option value="VEREADOR">Vereador (Titular)</option>
               <option value="ASSESSOR">Assessor</option>
             </select>
-            <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+            <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
               Adicionar
             </button>
           </form>
