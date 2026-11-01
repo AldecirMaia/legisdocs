@@ -9,6 +9,7 @@ import { DocumentModule } from './document/document.module';
 import { TenantModule } from './tenant/tenant.module'; 
 import { SuperAdminController } from './super-admin/super-admin.controller';
 import { VotacaoModule } from './votacao/votacao.module';
+import { PautaController } from './pauta/pauta.controller'; // <-- Adicionei o import do PautaController
 
 @Module({
   imports: [
@@ -18,12 +19,13 @@ import { VotacaoModule } from './votacao/votacao.module';
     SecretariaDestinoModule,
     DocumentModule,
     TenantModule,
-    VotacaoModule, // <-- Adicionei o módulo de votação aqui 
-    // O SuperAdminController foi retirado daqui!
+    VotacaoModule,
+     
   ],
   controllers: [
     AppController,
-    SuperAdminController // <-- O REGISTO CORRETO É AQUI!
+    SuperAdminController,
+    PautaController,// <-- O REGISTO CORRETO É AQUI!
   ],
   providers: [AppService],
 })

@@ -178,3 +178,14 @@ model RegistroVotacao {
     votos      Json // Guarda o mapa: { "id-do-vereador": "SIM" }
     criadoEm   DateTime @default(now())
 }
+
+model SessaoPauta {
+    id         String   @id @default(uuid())
+    tenantId   String
+    nomeSessao String
+    dataSessao String
+    itens      Json
+    criadoEm   DateTime @default(now())
+
+    @@index([tenantId, criadoEm])
+}

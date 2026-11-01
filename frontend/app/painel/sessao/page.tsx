@@ -11,8 +11,8 @@ interface DocPauta {
   protocolNum: number;
   year: number;
   ementa: string;
-  author?: { name: string };
-  gabinete?: { name: string; users?: any[] };
+  propositor?: string;
+  turnoVotacao?: string;
 }
 
 export default function ControloSessao() {
@@ -28,7 +28,6 @@ export default function ControloSessao() {
   const [votos, setVotos] = useState<Record<string, string>>({});
   const [totalVereadores, setTotalVereadores] = useState(0);
   
-  // Controle do Modal de Encerramento
   const [showModalEncerrar, setShowModalEncerrar] = useState(false);
 
   useEffect(() => {
@@ -44,9 +43,32 @@ export default function ControloSessao() {
 
       try {
         const apiEnv = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-        const resDocs = await fetch(`${apiEnv}/document/aprovados/${parsedUser.tenantId}`);
-        if (resDocs.ok) setDocumentos(await resDocs.json());
+        
+        // 1. NOVO FLUXO: Busca a Pauta Ativa enviada pelo Construtor
+        const resDocs = await fetch(`${apiEnv}/pauta/ativa/${parsedUser.tenantId}`);
+        if (resDocs.ok) {
+          const pauta = await resDocs.json();
+          if (pauta && pauta.itens) {
+            // Filtra apenas os que vão a votação e converte para manter compatibilidade com o Telão
+            const ordemDoDia = pauta.itens
+              .filter((item: any) => item.tramitacao === "VOTAÇÃO")
+              .map((item: any) => {
+                const [protocolNum, year] = item.numero.split('/');
+                return {
+                  id: item.id,
+                  type: item.type,
+                  protocolNum: parseInt(protocolNum) || 0,
+                  year: parseInt(year) || new Date().getFullYear(),
+                  ementa: item.ementa,
+                  propositor: item.propositor,
+                  turnoVotacao: item.turnoVotacao
+                };
+              });
+            setDocumentos(ordemDoDia);
+          }
+        }
 
+        // 2. Conta os vereadores para a barra de progresso
         const resGab = await fetch(`${apiEnv}/gabinete/list/${parsedUser.tenantId}`);
         if (resGab.ok) {
           const gabinetes = await resGab.json();
@@ -57,7 +79,7 @@ export default function ControloSessao() {
           setTotalVereadores(contagem);
         }
       } catch (error) {
-        console.error("Erro ao carregar dados:", error);
+        console.error("Erro ao carregar dados da sessão:", error);
       } finally {
         setLoading(false);
       }
@@ -99,25 +121,13 @@ export default function ControloSessao() {
 
   const handleAbrirVotacao = () => {
     if (!socket || !docSelecionado) return;
-    
-    const nomeGabineteFormatado = docSelecionado.gabinete?.name?.replace(/^Gabinete (do|da|de)?\s*/i, '');
-    const titular = docSelecionado.gabinete?.users?.find(u => u.role === "VEREADOR");
-    const docFormatado = {
-      ...docSelecionado,
-      propositor: titular?.name || nomeGabineteFormatado || docSelecionado.author?.name
-    };
-
-    socket.emit("abrirVotacao", { tenantId: user.tenantId, documento: docFormatado });
+    socket.emit("abrirVotacao", { tenantId: user.tenantId, documento: docSelecionado });
     setStatus("ABERTA");
     setVotos({});
   };
 
-  // Abre o Modal em vez do alerta nativo
-  const handleEncerrarVotacao = () => {
-    setShowModalEncerrar(true);
-  };
+  const handleEncerrarVotacao = () => setShowModalEncerrar(true);
 
-  // Executa o encerramento e salva no banco de dados
   const confirmarEncerramento = async () => {
     setShowModalEncerrar(false);
     if (!socket) return;
@@ -137,7 +147,8 @@ export default function ControloSessao() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenantId: user.tenantId,
-          documentId: docSelecionado?.id,
+          // Se for um item adicionado manualmente (ex: manual-173...), evitamos salvar o ID fake na tabela de docs, guardamos só o registo de votação
+          documentId: docSelecionado?.id.startsWith("manual-") ? undefined : docSelecionado?.id,
           sim: totalSim,
           nao: totalNao,
           abstencao: totalAbstencao,
@@ -145,7 +156,6 @@ export default function ControloSessao() {
           votos: votos
         })
       });
-      console.log("✅ Votação guardada com sucesso no Prisma!");
     } catch (error) {
       console.error("Erro ao guardar votação:", error);
     }
@@ -179,30 +189,43 @@ export default function ControloSessao() {
       <main className="flex-1 p-6 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         <div className="lg:col-span-5 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-[80vh]">
-          <div className="p-4 border-b border-gray-100 bg-gray-50 rounded-t-xl">
-            <h2 className="font-bold text-gray-800 text-lg">Ordem do Dia (Pauta)</h2>
-            <p className="text-xs text-gray-500 mt-1">Selecione o documento para colocar em votação.</p>
+          <div className="p-4 border-b border-gray-100 bg-gray-50 rounded-t-xl flex justify-between items-center">
+            <div>
+              <h2 className="font-bold text-gray-800 text-lg">Ordem do Dia (Pauta)</h2>
+              <p className="text-xs text-gray-500 mt-1">Selecione o documento para colocar em votação no Telão.</p>
+            </div>
+            <span className="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">{documentos.length} itens</span>
           </div>
           
           <div className="p-4 flex-1 overflow-y-auto space-y-3">
             {documentos.length === 0 ? (
-              <p className="text-center text-gray-500 mt-10">Nenhum documento na pauta.</p>
+              <div className="text-center text-gray-500 mt-10 p-6 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                <AlertTriangle className="w-10 h-10 mx-auto text-gray-400 mb-2" />
+                <p className="font-bold">Nenhum documento na pauta oficial.</p>
+                <p className="text-sm mt-1">Vá ao "Construtor de Pauta" e envie os documentos para a Sessão.</p>
+              </div>
             ) : documentos.map(doc => (
               <div 
                 key={doc.id} 
                 onClick={() => status === "AGUARDANDO" && setDocSelecionado(doc)}
                 className={`border rounded-lg p-4 transition-colors ${
                   docSelecionado?.id === doc.id 
-                    ? "border-blue-500 bg-blue-50 ring-1 ring-blue-500" 
+                    ? "border-blue-500 bg-blue-50 ring-2 ring-blue-500 shadow-sm" 
                     : status !== "AGUARDANDO" 
                       ? "border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed" 
                       : "border-gray-200 hover:border-blue-300 cursor-pointer"
                 }`}
               >
-                <span className="text-xs font-bold bg-gray-200 text-gray-700 px-2 py-1 rounded uppercase">
-                  {doc.type.replace('_', ' ')} Nº {doc.protocolNum}/{doc.year}
-                </span>
-                <p className="text-sm font-medium text-gray-800 mt-2 line-clamp-2">{doc.ementa}</p>
+                <div className="flex justify-between items-start mb-2">
+                  <span className="text-xs font-bold bg-gray-800 text-white px-2 py-1 rounded uppercase">
+                    {doc.type} Nº {doc.protocolNum > 0 ? String(doc.protocolNum).padStart(3, '0') : "S/N"}/{doc.year}
+                  </span>
+                  {doc.turnoVotacao && (
+                    <span className="text-[10px] font-bold bg-green-100 text-green-800 px-2 py-0.5 rounded uppercase">{doc.turnoVotacao}</span>
+                  )}
+                </div>
+                <p className="text-sm font-medium text-gray-800 line-clamp-2">"{doc.ementa}"</p>
+                <p className="text-xs text-gray-500 mt-2 font-semibold">Autor: {doc.propositor}</p>
               </div>
             ))}
           </div>
@@ -224,11 +247,17 @@ export default function ControloSessao() {
             ) : (
               <div className="flex-1 flex flex-col">
                 <div className="bg-gray-50 border border-gray-200 p-5 rounded-xl mb-8">
-                  <span className="text-xs font-bold bg-blue-100 text-blue-800 px-2 py-1 rounded uppercase tracking-wider mb-3 inline-block">
-                    Matéria Selecionada
-                  </span>
-                  <h3 className="font-bold text-lg text-gray-900 mb-2">{docSelecionado.type.replace('_', ' ')} Nº {docSelecionado.protocolNum}/{docSelecionado.year}</h3>
-                  <p className="text-sm text-gray-600 italic">"{docSelecionado.ementa}"</p>
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-xs font-bold bg-blue-100 text-blue-800 px-2 py-1 rounded uppercase tracking-wider">
+                      Matéria Selecionada
+                    </span>
+                    {docSelecionado.turnoVotacao && (
+                      <span className="text-xs font-bold text-green-700 uppercase tracking-widest">{docSelecionado.turnoVotacao}</span>
+                    )}
+                  </div>
+                  <h3 className="font-bold text-lg text-gray-900 mb-2">{docSelecionado.type} Nº {docSelecionado.protocolNum > 0 ? String(docSelecionado.protocolNum).padStart(3, '0') : "S/N"}/{docSelecionado.year}</h3>
+                  <p className="text-sm text-gray-600 italic mb-2">"{docSelecionado.ementa}"</p>
+                  <p className="text-sm font-bold text-gray-700 border-t pt-2 mt-2">Autoridade Proponente: {docSelecionado.propositor}</p>
                 </div>
 
                 {status === "AGUARDANDO" && (
@@ -258,15 +287,9 @@ export default function ControloSessao() {
                       </div>
                       
                       <div className="w-full bg-gray-200 rounded-full h-4 mt-4 overflow-hidden flex">
-                        <div className="bg-green-500 h-full" style={{ width: `${totalVereadores > 0 ? (sim / totalVereadores) * 100 : 0}%` }}></div>
-                        <div className="bg-red-500 h-full" style={{ width: `${totalVereadores > 0 ? (nao / totalVereadores) * 100 : 0}%` }}></div>
-                        <div className="bg-yellow-500 h-full" style={{ width: `${totalVereadores > 0 ? (abs / totalVereadores) * 100 : 0}%` }}></div>
-                      </div>
-                      
-                      <div className="flex justify-center gap-6 mt-4 text-sm font-bold">
-                        <span className="text-green-600">Sim: {sim}</span>
-                        <span className="text-red-600">Não: {nao}</span>
-                        <span className="text-yellow-600">Abs: {abs}</span>
+                        <div className="bg-green-500 h-full transition-all duration-500" style={{ width: `${totalVereadores > 0 ? (sim / totalVereadores) * 100 : 0}%` }}></div>
+                        <div className="bg-red-500 h-full transition-all duration-500" style={{ width: `${totalVereadores > 0 ? (nao / totalVereadores) * 100 : 0}%` }}></div>
+                        <div className="bg-yellow-500 h-full transition-all duration-500" style={{ width: `${totalVereadores > 0 ? (abs / totalVereadores) * 100 : 0}%` }}></div>
                       </div>
                     </div>
 
@@ -283,10 +306,25 @@ export default function ControloSessao() {
                   <div className="mt-auto text-center border-2 border-gray-200 rounded-xl p-8 bg-gray-50">
                     <CheckCircle className="w-16 h-16 text-blue-600 mx-auto mb-4" />
                     <h4 className="font-bold text-gray-900 text-2xl mb-2">Votação Encerrada!</h4>
-                    <p className="text-gray-600 mb-8">O resultado final está cravado no telão do plenário.</p>
+                    
+                    <div className="flex justify-center gap-4 mt-6 mb-8 text-lg font-black">
+                      <span className="text-green-700 bg-green-100 border border-green-300 px-6 py-3 rounded-xl shadow-sm flex flex-col">
+                        <span className="text-xs text-green-600 uppercase tracking-widest mb-1">Sim</span>
+                        <span className="text-3xl">{sim}</span>
+                      </span>
+                      <span className="text-red-700 bg-red-100 border border-red-300 px-6 py-3 rounded-xl shadow-sm flex flex-col">
+                        <span className="text-xs text-red-600 uppercase tracking-widest mb-1">Não</span>
+                        <span className="text-3xl">{nao}</span>
+                      </span>
+                      <span className="text-yellow-700 bg-yellow-100 border border-yellow-300 px-6 py-3 rounded-xl shadow-sm flex flex-col">
+                        <span className="text-xs text-yellow-600 uppercase tracking-widest mb-1">Abstenção</span>
+                        <span className="text-3xl">{abs}</span>
+                      </span>
+                    </div>
+
                     <button 
                       onClick={handleLimparPainel}
-                      className="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-3.5 rounded-lg shadow-md transition-colors"
+                      className="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-4 rounded-xl shadow-md transition-colors text-lg"
                     >
                       Limpar Painel para Próxima Matéria
                     </button>
@@ -298,7 +336,7 @@ export default function ControloSessao() {
         </div>
       </main>
 
-      {/* MODAL DE CONFIRMAÇÃO (Substitui o window.confirm) */}
+      {/* MODAL DE CONFIRMAÇÃO */}
       {showModalEncerrar && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200">

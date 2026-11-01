@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { io, Socket } from "socket.io-client";
-import { CheckCircle, AlertTriangle, Monitor } from "lucide-react";
+import { CheckCircle, AlertTriangle, Monitor, XCircle } from "lucide-react";
 
 interface Vereador {
   id: string;
@@ -53,7 +53,6 @@ export default function TelaoPlenario() {
   useEffect(() => {
     if (!tenantId) return;
 
-    // Forçar protocolo WebSocket para evitar bloqueios de CORS e Polling
     const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4000';
     const newSocket = io(API_URL, { transports: ['websocket'] });
 
@@ -97,6 +96,8 @@ export default function TelaoPlenario() {
   const totalAbstencao = Object.values(votos).filter(v => v === "ABSTENCAO").length;
   const totalVotantes = Object.keys(votos).length;
   const ausentes = vereadores.length - totalVotantes;
+  
+  const isAprovado = totalSim > totalNao;
 
   const getCorVoto = (voto?: string) => {
     switch (voto) {
@@ -186,12 +187,12 @@ export default function TelaoPlenario() {
             <h2 className="text-slate-500 font-bold tracking-widest uppercase text-sm mb-6">Resultado Parcial / Final</h2>
             
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-green-950/30 border border-green-900/50 rounded-xl p-4 flex flex-col items-center justify-center">
-                <span className="text-green-500 font-bold uppercase text-xs tracking-wider mb-1">Sim</span>
+              <div className={`border rounded-xl p-4 flex flex-col items-center justify-center transition-colors duration-500 ${status === "ENCERRADA" && isAprovado ? 'bg-green-600 border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.3)]' : 'bg-green-950/30 border-green-900/50'}`}>
+                <span className={`font-bold uppercase text-xs tracking-wider mb-1 ${status === "ENCERRADA" && isAprovado ? 'text-green-100' : 'text-green-500'}`}>Sim</span>
                 <span className="text-5xl font-black text-white">{totalSim}</span>
               </div>
-              <div className="bg-red-950/30 border border-red-900/50 rounded-xl p-4 flex flex-col items-center justify-center">
-                <span className="text-red-500 font-bold uppercase text-xs tracking-wider mb-1">Não</span>
+              <div className={`border rounded-xl p-4 flex flex-col items-center justify-center transition-colors duration-500 ${status === "ENCERRADA" && !isAprovado && totalNao >= totalSim ? 'bg-red-600 border-red-500 shadow-[0_0_20px_rgba(220,38,38,0.3)]' : 'bg-red-950/30 border-red-900/50'}`}>
+                <span className={`font-bold uppercase text-xs tracking-wider mb-1 ${status === "ENCERRADA" && !isAprovado && totalNao >= totalSim ? 'text-red-100' : 'text-red-500'}`}>Não</span>
                 <span className="text-5xl font-black text-white">{totalNao}</span>
               </div>
               <div className="bg-yellow-950/30 border border-yellow-900/50 rounded-xl p-4 flex flex-col items-center justify-center">
@@ -206,7 +207,24 @@ export default function TelaoPlenario() {
           </div>
         </div>
 
-        <div className="xl:w-2/3 bg-slate-900 rounded-2xl border border-slate-800 p-8 shadow-2xl overflow-hidden flex flex-col">
+        <div className="xl:w-2/3 bg-slate-900 rounded-2xl border border-slate-800 p-8 shadow-2xl flex flex-col relative overflow-hidden">
+          
+          {/* Banner Animado de Resultado Final */}
+          {status === "ENCERRADA" && (
+            <div className={`mb-8 p-6 md:p-8 rounded-2xl flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 shadow-2xl animate-in slide-in-from-top-8 fade-in duration-700 z-10 relative overflow-hidden ${isAprovado ? 'bg-green-600 border-2 border-green-400' : 'bg-red-600 border-2 border-red-400'}`}>
+              <div className="absolute inset-0 bg-white/10 w-full h-full transform -skew-x-12 animate-[pulse_2s_ease-in-out_infinite]"></div>
+              {isAprovado ? <CheckCircle className="w-16 h-16 md:w-20 md:h-20 text-white relative z-10" /> : <XCircle className="w-16 h-16 md:w-20 md:h-20 text-white relative z-10" />}
+              <div className="text-center md:text-left relative z-10">
+                <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-white uppercase tracking-widest drop-shadow-md">
+                  MATÉRIA {isAprovado ? 'APROVADA' : 'REJEITADA'}
+                </h2>
+                <p className="text-white/90 font-bold tracking-widest mt-2 uppercase text-lg">
+                  Decisão por {totalSim} votos a {totalNao}
+                </p>
+              </div>
+            </div>
+          )}
+
           <h2 className="text-slate-500 font-bold tracking-widest uppercase text-sm mb-6">Quadro de Votação Nominal</h2>
           
           <div className="flex-1 overflow-y-auto pr-2">
@@ -220,7 +238,7 @@ export default function TelaoPlenario() {
                   const votoAtual = votos[ver.id];
                   
                   return (
-                    <div key={ver.id} className={`flex flex-col justify-between p-5 rounded-xl border-2 transition-all duration-500 ${getCorVoto(votoAtual)}`}>
+                    <div key={ver.id} className={`flex flex-col justify-between p-5 rounded-xl border-2 transition-all duration-500 ${getCorVoto(votoAtual)} ${status === "ENCERRADA" && votoAtual ? 'scale-[1.02]' : ''}`}>
                       <div>
                         <h3 className="font-black text-lg uppercase tracking-wide truncate" title={ver.name}>{ver.name}</h3>
                         <p className="text-xs font-bold opacity-70 mt-1 uppercase tracking-widest">{ver.partido || "Sem Partido"}</p>
