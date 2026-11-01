@@ -8,6 +8,7 @@ import { SecretariaDestinoModule } from './secretaria-destino/secretaria-destino
 import { DocumentModule } from './document/document.module';
 import { TenantModule } from './tenant/tenant.module'; 
 import { SuperAdminController } from './super-admin/super-admin.controller';
+import { VotacaoModule } from './votacao/votacao.module';
 
 @Module({
   imports: [
@@ -16,7 +17,8 @@ import { SuperAdminController } from './super-admin/super-admin.controller';
     UserModule,
     SecretariaDestinoModule,
     DocumentModule,
-    TenantModule, 
+    TenantModule,
+    VotacaoModule, // <-- Adicionei o módulo de votação aqui 
     // O SuperAdminController foi retirado daqui!
   ],
   controllers: [
