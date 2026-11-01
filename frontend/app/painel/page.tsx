@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Eye, Download, FileText, Folder, FolderOpen, Building2 } from 'lucide-react';
+import { Eye, Download, FileText, Folder, FolderOpen, Building2, MonitorPlay, Vote } from 'lucide-react'; // <-- Ícones adicionados
 
 interface UserAuth {
   name: string;
@@ -72,7 +72,8 @@ export default function Painel() {
       <main className="flex-1 p-6 sm:p-10 max-w-7xl mx-auto w-full">
         {user.role === "SUPER_ADMIN" && <SuperAdminDashboard />}
         {user.role === "SECRETARIA" && <SecretariaDashboard tenantId={user.tenantId} />}
-        {(user.role === "VEREADOR" || user.role === "ASSESSOR") && <GabineteDashboard />}
+        {/* Passando a 'role' para o componente filho controlar os acessos internos */}
+        {(user.role === "VEREADOR" || user.role === "ASSESSOR") && <GabineteDashboard role={user.role} />}
       </main>
     </div>
   );
@@ -182,7 +183,17 @@ function SecretariaDashboard({ tenantId }: { tenantId: string }) {
       <p className="text-gray-600 mb-8">Faça a gestão da Câmara, gabinetes e pauta de sessões.</p>
       
       {/* Cards Superiores */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-12">
+        
+        {/* NOVO CARTÃO: Plenário / Sessão */}
+        <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-red-600 transition-all duration-200 hover:-translate-y-1 hover:shadow-md cursor-pointer">
+          <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-red-700 flex items-center gap-2">
+            <MonitorPlay className="w-5 h-5" /> Plenário ao Vivo
+          </h3>
+          <p className="text-sm text-gray-500 mb-6 min-h-[40px]">Controle a sessão e coloque documentos em votação no telão.</p>
+          <Link href="/painel/sessao" className="block text-center w-full bg-red-50 text-red-700 py-2.5 rounded-lg font-semibold">Abrir Controlo</Link>
+        </div>
+
         <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-blue-600 transition-all duration-200 hover:-translate-y-1 hover:shadow-md cursor-pointer">
           <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-blue-700">Gestão de Gabinetes</h3>
           <p className="text-sm text-gray-500 mb-6 min-h-[40px]">Crie novos gabinetes, registe vereadores e liberte acessos.</p>
@@ -229,7 +240,6 @@ function SecretariaDashboard({ tenantId }: { tenantId: string }) {
           </p>
         ) : (
           <div className="space-y-4">
-            {/* NÍVEL 1: GABINETES (Fechado por Padrão) */}
             {Object.entries(documentosAgrupados).map(([gabinete, anos]) => (
               <details key={gabinete} className="group/gabinete bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden [&_summary::-webkit-details-marker]:hidden open:shadow-md transition-all">
                 <summary className="bg-slate-50 p-4 cursor-pointer list-none flex items-center justify-between hover:bg-slate-100 transition-colors group-open/gabinete:border-b border-gray-200">
@@ -248,7 +258,6 @@ function SecretariaDashboard({ tenantId }: { tenantId: string }) {
                 </summary>
                 
                 <div className="p-6 space-y-4 bg-white">
-                  {/* NÍVEL 2: ANOS */}
                   {Object.entries(anos).map(([ano, tipos]) => (
                     <details key={ano} className="group bg-gray-50 rounded-lg border border-gray-200 open:bg-white open:shadow-md transition-all">
                       <summary className="flex items-center gap-3 p-3 font-semibold cursor-pointer list-none text-gray-700 hover:text-blue-700 [&::-webkit-details-marker]:hidden">
@@ -258,7 +267,6 @@ function SecretariaDashboard({ tenantId }: { tenantId: string }) {
                       </summary>
                       
                       <div className="p-4 pt-2 space-y-4 ml-4">
-                        {/* NÍVEL 3: TIPO DE DOCUMENTO */}
                         {Object.entries(tipos).map(([tipo, documentos]) => (
                           <details key={tipo} className="group/tipo bg-white rounded border border-gray-100 open:border-blue-100">
                             <summary className="flex items-center gap-2 p-2 font-medium cursor-pointer list-none text-gray-600 hover:text-blue-600 [&::-webkit-details-marker]:hidden">
@@ -267,14 +275,13 @@ function SecretariaDashboard({ tenantId }: { tenantId: string }) {
                               {tipo} <span className="text-xs bg-gray-200 px-2 py-0.5 rounded-full ml-2">{documentos.length}</span>
                             </summary>
                             
-                            {/* NÍVEL 4: LISTA DE DOCUMENTOS */}
                             <ul className="divide-y divide-gray-100 border-l-2 border-blue-50 ml-4 mt-2">
                               {documentos.map((doc) => (
                                 <li key={doc.id} className="p-4 pl-6 flex flex-col md:flex-row md:items-center justify-between hover:bg-slate-50 gap-4">
                                   <div className="flex-1">
                                     <p className="font-bold text-gray-800 flex items-center gap-2">
                                       <FileText className="w-4 h-4 text-gray-400" />
-                                      {doc.type} Nº {doc.protocolNum}/{doc.year}
+                                      {doc.type.replace('_', ' ')} Nº {doc.protocolNum}/{doc.year}
                                     </p>
                                     <p className="text-sm text-gray-600 mt-1 line-clamp-2" title={doc.ementa}>
                                       {doc.ementa || 'Sem ementa registada.'}
@@ -309,16 +316,29 @@ function SecretariaDashboard({ tenantId }: { tenantId: string }) {
   );
 }
 
-function GabineteDashboard() {
+function GabineteDashboard({ role }: { role: string }) { // <-- Prop 'role' adicionada
   return (
     <div>
       <h2 className="text-3xl font-bold text-gray-800 mb-6">Meu Gabinete</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        
+        {/* NOVO CARTÃO: Terminal de Votação (Apenas para o titular do mandato) */}
+        {role === "VEREADOR" && (
+          <div className="group bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-800 border-t-4 border-t-green-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg">
+            <h3 className="font-bold text-xl mb-2 text-white group-hover:text-green-400 flex items-center gap-2">
+              <Vote className="w-5 h-5" /> Painel de Votação
+            </h3>
+            <p className="text-sm text-slate-400 mb-6 min-h-[40px]">Terminal exclusivo para cravar o seu voto nas sessões plenárias.</p>
+            <Link href="/painel/terminal" className="block text-center w-full bg-green-600 text-white hover:bg-green-500 py-2.5 rounded-lg font-bold transition-colors">Entrar na Sessão</Link>
+          </div>
+        )}
+
         <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-blue-600 transition-all duration-200 hover:-translate-y-1 hover:shadow-md">
           <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-blue-700">Documentos</h3>
           <p className="text-sm text-gray-500 mb-6 min-h-[40px]">Redija e estruture um novo pedido ao executivo municipal.</p>
           <Link href="/painel/indicacao/nova" className="block text-center w-full bg-blue-50 text-blue-700 py-2.5 rounded-lg font-semibold">Criar Documento</Link>
         </div>
+
         <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-gray-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md">
           <h3 className="font-bold text-xl mb-2 text-gray-800">Rascunhos e Histórico</h3>
           <p className="text-sm text-gray-500 mb-6 min-h-[40px]">Documentos em andamento, enviados e aprovados pela Secretaria.</p>

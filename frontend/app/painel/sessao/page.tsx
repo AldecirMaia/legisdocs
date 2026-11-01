@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { io, Socket } from "socket.io-client";
-import { PlayCircle, StopCircle, MonitorPlay, CheckCircle, Users } from "lucide-react";
+import { PlayCircle, StopCircle, MonitorPlay, CheckCircle, Users, AlertTriangle, X } from "lucide-react";
 import Link from "next/link";
 
 interface DocPauta {
@@ -22,11 +22,14 @@ export default function ControloSessao() {
   const [documentos, setDocumentos] = useState<DocPauta[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Estado do Controlo da Votação
+  // Estado do Controlo
   const [docSelecionado, setDocSelecionado] = useState<DocPauta | null>(null);
   const [status, setStatus] = useState<"AGUARDANDO" | "ABERTA" | "ENCERRADA">("AGUARDANDO");
   const [votos, setVotos] = useState<Record<string, string>>({});
   const [totalVereadores, setTotalVereadores] = useState(0);
+  
+  // Controle do Modal de Encerramento
+  const [showModalEncerrar, setShowModalEncerrar] = useState(false);
 
   useEffect(() => {
     let activeSocket: Socket | null = null;
@@ -40,10 +43,11 @@ export default function ControloSessao() {
       setUser(parsedUser);
 
       try {
-        const resDocs = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/document/aprovados/${parsedUser.tenantId}`);
+        const apiEnv = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const resDocs = await fetch(`${apiEnv}/document/aprovados/${parsedUser.tenantId}`);
         if (resDocs.ok) setDocumentos(await resDocs.json());
 
-        const resGab = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/gabinete/list/${parsedUser.tenantId}`);
+        const resGab = await fetch(`${apiEnv}/gabinete/list/${parsedUser.tenantId}`);
         if (resGab.ok) {
           const gabinetes = await resGab.json();
           let contagem = 0;
@@ -53,17 +57,16 @@ export default function ControloSessao() {
           setTotalVereadores(contagem);
         }
       } catch (error) {
-        console.error("Erro ao carregar dados da sessão:", error);
+        console.error("Erro ao carregar dados:", error);
       } finally {
         setLoading(false);
       }
 
-      // Conectar forçando o protocolo WebSocket
-      const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4000';
-      activeSocket = io(API_URL, { transports: ['websocket'] });
+      const apiEnv = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const socketUrl = apiEnv.replace('/api', ''); 
+      activeSocket = io(socketUrl, { transports: ['websocket'] });
 
       activeSocket.on("connect", () => {
-        console.log("🟢 Controlo conectado ao Plenário!");
         activeSocket?.emit("entrarSala", { tenantId: parsedUser.tenantId });
       });
 
@@ -94,7 +97,6 @@ export default function ControloSessao() {
     };
   }, [router]);
 
-  // AÇÕES DA SECRETARIA
   const handleAbrirVotacao = () => {
     if (!socket || !docSelecionado) return;
     
@@ -105,29 +107,29 @@ export default function ControloSessao() {
       propositor: titular?.name || nomeGabineteFormatado || docSelecionado.author?.name
     };
 
-    socket.emit("abrirVotacao", {
-      tenantId: user.tenantId,
-      documento: docFormatado
-    });
-    
+    socket.emit("abrirVotacao", { tenantId: user.tenantId, documento: docFormatado });
     setStatus("ABERTA");
     setVotos({});
   };
 
-  const handleEncerrarVotacao = async () => {
-    if (!socket || !confirm("Tem a certeza que deseja encerrar esta votação? O resultado será guardado permanentemente.")) return;
-    
-    // 1. Trava o telão e os tablets instantaneamente
+  // Abre o Modal em vez do alerta nativo
+  const handleEncerrarVotacao = () => {
+    setShowModalEncerrar(true);
+  };
+
+  // Executa o encerramento e salva no banco de dados
+  const confirmarEncerramento = async () => {
+    setShowModalEncerrar(false);
+    if (!socket) return;
+
     socket.emit("encerrarVotacao", { tenantId: user.tenantId });
     setStatus("ENCERRADA");
 
-    // 2. Calcula os totais finais
     const totalSim = Object.values(votos).filter(v => v === "SIM").length;
     const totalNao = Object.values(votos).filter(v => v === "NAO").length;
     const totalAbstencao = Object.values(votos).filter(v => v === "ABSTENCAO").length;
     const ausentes = totalVereadores - (totalSim + totalNao + totalAbstencao);
 
-    // 3. Guarda no PostgreSQL via API NestJS
     try {
       const apiEnv = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
       await fetch(`${apiEnv}/votacao/salvar`, {
@@ -294,8 +296,41 @@ export default function ControloSessao() {
             )}
           </div>
         </div>
-
       </main>
+
+      {/* MODAL DE CONFIRMAÇÃO (Substitui o window.confirm) */}
+      {showModalEncerrar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-4">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center border-4 border-red-50">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <button onClick={() => setShowModalEncerrar(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-2 tracking-tight">Encerrar Votação?</h3>
+            <p className="text-gray-600 mb-8 leading-relaxed">
+              Tem a certeza que deseja encerrar o escrutínio desta matéria? O resultado será gravado permanentemente na base de dados e cravado no telão para o público.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowModalEncerrar(false)}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3.5 rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={confirmarEncerramento}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-xl transition-colors shadow-lg shadow-red-600/30"
+              >
+                Sim, Encerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
