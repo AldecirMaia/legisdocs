@@ -222,7 +222,7 @@ function SecretariaDashboard({ tenantId }: { tenantId: string }) {
               Fila de Análise
             </h3>
             <p className="text-sm text-gray-500 mb-6 flex-1">Aprove ou mande refazer as indicações e requerimentos recebidos.</p>
-            <Link href="/painel/fila" className="block text-center w-full bg-yellow-50 hover:bg-yellow-100 text-yellow-700 py-2.5 rounded-lg font-semibold transition-colors">
+            <Link href="/painel/analise" className="block text-center w-full bg-yellow-50 hover:bg-yellow-100 text-yellow-700 py-2.5 rounded-lg font-semibold transition-colors">
               Ver Documentos
             </Link>
           </div>
@@ -255,7 +255,7 @@ function SecretariaDashboard({ tenantId }: { tenantId: string }) {
               Configurações
             </h3>
             <p className="text-sm text-gray-500 mb-6 flex-1">Defina o nome da Prefeita, Palácio e regras para gerar PDFs.</p>
-            <Link href="/painel/config" className="block text-center w-full bg-purple-50 hover:bg-purple-100 text-purple-700 py-2.5 rounded-lg font-semibold transition-colors">
+            <Link href="/painel/configuracoes" className="block text-center w-full bg-purple-50 hover:bg-purple-100 text-purple-700 py-2.5 rounded-lg font-semibold transition-colors">
               Ajustar Parâmetros
             </Link>
           </div>
