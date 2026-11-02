@@ -19,19 +19,19 @@ export default function PrepararAta() {
   const [pautaAtiva, setPautaAtiva] = useState<SessaoPautaInfo | null>(null);
   const [historicoPautas, setHistoricoPautas] = useState<SessaoPautaInfo[]>([]);
 
-  // Campos dinâmicos baseados no modelo da Câmara
+  // Campos limpos para preenchimento com placeholders dinâmicos
   const [formData, setFormData] = useState({
-    numeroSessao: "20ª",
-    anoLegislativo: "2º",
-    periodoLegislativo: "2º",
-    legislatura: "DÉCIMA PRIMEIRA",
-    dataExtenso: "sexto dia do mês de outubro do ano de dois mil e vinte e seis",
-    horarioInicio: "horario de início da sessão",
-    presidente: "nome do presidente(a) da sessão",
-    vereadorBiblia: "nome do vereador(a) que fez a leitura da bíblia",
-    primeiroSecretario: "nome do primeiro secretário(a) que fez a chamada",
-    secretariaGeral: "Nome do secretario(a) que lavrou a ata",
-    textoFechamento: "Encerrada a ordem do dia. Em ato contínuo, o Senhor Presidente com suas considerações finais na presença dos Senhores vereadores, deu por encerrada a presente sessão ordinária."
+    numeroSessao: "",
+    anoLegislativo: "",
+    periodoLegislativo: "",
+    legislatura: "",
+    dataExtenso: "",
+    horarioInicio: "",
+    presidente: "",
+    vereadorBiblia: "",
+    primeiroSecretario: "",
+    secretariaGeral: "",
+    textoFechamento: ""
   });
 
   useEffect(() => {
@@ -47,14 +47,15 @@ export default function PrepararAta() {
     try {
       const apiEnv = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
       
-      // Buscar Pauta Ativa do Dia
       const resAtiva = await fetch(`${apiEnv}/pauta/ativa/${tId}`);
       if (resAtiva.ok) {
-        const dataAtiva = await resAtiva.json();
-        if (dataAtiva) setPautaAtiva(dataAtiva);
+        const textAtiva = await resAtiva.text();
+        if (textAtiva && textAtiva.trim() !== "") {
+          const dataAtiva = JSON.parse(textAtiva);
+          if (dataAtiva) setPautaAtiva(dataAtiva);
+        }
       }
 
-      // Buscar Histórico de Pautas/Atas geradas
       const resHistorico = await fetch(`${apiEnv}/pauta/historico/${tId}`);
       if (resHistorico.ok) {
         const dataHist = await resHistorico.json();
@@ -137,7 +138,7 @@ export default function PrepararAta() {
           </div>
         </div>
 
-        {/* FORMULÁRIO DE PARÂMETROS */}
+        {/* FORMULÁRIO DE PARÂMETROS COM PLACEHOLDERS */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
           <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2 border-b pb-4">
             <Settings className="w-5 h-5 text-gray-400" /> Parâmetros do Documento
@@ -146,41 +147,41 @@ export default function PrepararAta() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1">Nº da Sessão Ordinária</label>
-              <input type="text" name="numeroSessao" value={formData.numeroSessao} onChange={handleChange} className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white" />
+              <input type="text" name="numeroSessao" value={formData.numeroSessao} onChange={handleChange} placeholder="Ex: 20ª" className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white" />
             </div>
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1">Ano Legislativo</label>
-              <input type="text" name="anoLegislativo" value={formData.anoLegislativo} onChange={handleChange} className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white" />
+              <input type="text" name="anoLegislativo" value={formData.anoLegislativo} onChange={handleChange} placeholder="Ex: 2º" className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white" />
             </div>
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1">Data por Extenso (Cabeçalho)</label>
-              <input type="text" name="dataExtenso" value={formData.dataExtenso} onChange={handleChange} className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white" />
+              <input type="text" name="dataExtenso" value={formData.dataExtenso} onChange={handleChange} placeholder="Ex: sexto dia do mês de outubro..." className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white" />
             </div>
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1">Horário de Início</label>
-              <input type="text" name="horarioInicio" value={formData.horarioInicio} onChange={handleChange} className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white" />
+              <input type="text" name="horarioInicio" value={formData.horarioInicio} onChange={handleChange} placeholder="Ex: 09:00 horas" className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white" />
             </div>
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1">Presidente da Sessão</label>
-              <input type="text" name="presidente" value={formData.presidente} onChange={handleChange} className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white" />
+              <input type="text" name="presidente" value={formData.presidente} onChange={handleChange} placeholder="Ex: Nome do Presidente" className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white" />
             </div>
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1">Vereador (Mensagem Bíblica)</label>
-              <input type="text" name="vereadorBiblia" value={formData.vereadorBiblia} onChange={handleChange} className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white" />
+              <input type="text" name="vereadorBiblia" value={formData.vereadorBiblia} onChange={handleChange} placeholder="Ex: Nome do Vereador" className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white" />
             </div>
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1">1º Secretário (Fez a Chamada)</label>
-              <input type="text" name="primeiroSecretario" value={formData.primeiroSecretario} onChange={handleChange} className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white" />
+              <input type="text" name="primeiroSecretario" value={formData.primeiroSecretario} onChange={handleChange} placeholder="Ex: Nome do Primeiro Secretário" className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white" />
             </div>
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1">Secretária Geral (Lavrou a Ata)</label>
-              <input type="text" name="secretariaGeral" value={formData.secretariaGeral} onChange={handleChange} className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white" />
+              <input type="text" name="secretariaGeral" value={formData.secretariaGeral} onChange={handleChange} placeholder="Ex: Nome do Secretário(a)" className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white" />
             </div>
           </div>
 
           <div className="mb-8">
             <label className="block text-sm font-bold text-gray-700 mb-1">Texto de Encerramento</label>
-            <textarea name="textoFechamento" value={formData.textoFechamento} onChange={handleChange} rows={4} className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white"></textarea>
+            <textarea name="textoFechamento" value={formData.textoFechamento} onChange={handleChange} rows={4} placeholder="Ex: Encerrada a ordem do dia. Em ato contínuo..." className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white"></textarea>
           </div>
 
           <button 

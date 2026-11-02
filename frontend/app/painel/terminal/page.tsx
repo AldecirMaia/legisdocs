@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { io, Socket } from "socket.io-client";
-import { CheckCircle, AlertCircle, Clock, ThumbsUp, ThumbsDown, Hand, ShieldAlert } from "lucide-react";
+import { CheckCircle, AlertCircle, Clock, ThumbsUp, ThumbsDown, Hand, ShieldAlert, CheckSquare, Vote, Loader2 } from "lucide-react";
 import Link from "next/link";
 
 interface UserAuth {
@@ -17,15 +17,14 @@ export default function TerminalVereador() {
   const router = useRouter();
   const [user, setUser] = useState<UserAuth | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null); // NOVO: Controlo de Bloqueio
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
 
-  // Estado da Votação
-  const [status, setStatus] = useState<"AGUARDANDO" | "ABERTA" | "ENCERRADA">("AGUARDANDO");
+  const [status, setStatus] = useState<"AGUARDANDO" | "ABERTA" | "CHAMADA" | "ENCERRADA">("AGUARDANDO");
   const [documento, setDocumento] = useState<any>(null);
   
-  // Controle em duas etapas (UX)
   const [votoSelecionado, setVotoSelecionado] = useState<"SIM" | "NAO" | "ABSTENCAO" | null>(null);
   const [meuVoto, setMeuVoto] = useState<"SIM" | "NAO" | "ABSTENCAO" | null>(null);
+  const [presencaConfirmada, setPresencaConfirmada] = useState(false);
 
   useEffect(() => {
     const iniciarTerminal = () => {
@@ -34,10 +33,9 @@ export default function TerminalVereador() {
       
       const parsedUser = JSON.parse(storedUser);
       
-      // BLOQUEIO DE SEGURANÇA: Se não for Vereador ou Super Admin, bloqueia na hora!
       if (parsedUser.role !== "VEREADOR" && parsedUser.role !== "SUPER_ADMIN") {
         setIsAuthorized(false);
-        return; // Interrompe a função aqui. Não liga ao WebSocket.
+        return; 
       }
 
       setIsAuthorized(true);
@@ -83,6 +81,21 @@ export default function TerminalVereador() {
         }
       });
 
+      newSocket.on("chamadaAberta", (chamadaData) => {
+        // 1. Se o vereador entrou atrasado/fez refresh, mas JÁ TINHA confirmado presença antes, ignoramos.
+        if (chamadaData && chamadaData.presencas && chamadaData.presencas.includes(parsedUser.id)) {
+          return; 
+        }
+
+        // 2. Se a chamada for aberta e não houver uma votação ocorrendo, exibe o cartão de presença
+        setStatus((statusAtual) => {
+          if (statusAtual === "ABERTA") return "ABERTA"; // Proteção: Votação é sempre prioritária
+          return "CHAMADA";
+        });
+        
+        setPresencaConfirmada(false);
+      });
+
       setSocket(newSocket);
     };
 
@@ -93,13 +106,11 @@ export default function TerminalVereador() {
     };
   }, [router]);
 
-  // Apenas seleciona visualmente
   const selecionarVoto = (voto: "SIM" | "NAO" | "ABSTENCAO") => {
     if (status !== "ABERTA") return;
     setVotoSelecionado(voto);
   };
 
-  // Envia para o Telão e grava
   const confirmarVoto = () => {
     if (!socket || !user || status !== "ABERTA" || !votoSelecionado) return;
     
@@ -111,7 +122,14 @@ export default function TerminalVereador() {
     });
   };
 
-  // 1. ECRÃ DE BLOQUEIO (Assessor tenta aceder)
+  const registrarPresenca = () => {
+    if (!socket || !user) return;
+    socket.emit("confirmarPresenca", { tenantId: user.tenantId, vereadorId: user.id });
+    setPresencaConfirmada(true);
+    setTimeout(() => setStatus("AGUARDANDO"), 3000); 
+  };
+
+
   if (isAuthorized === false) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-center p-6 select-none">
@@ -127,14 +145,12 @@ export default function TerminalVereador() {
     );
   }
 
-  // 2. ECRÃ DE CARREGAMENTO
   if (!user || isAuthorized === null) {
-    return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-400 font-bold">A verificar credenciais...</div>;
+    return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-400 font-bold"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>;
   }
 
   const precisaConfirmar = votoSelecionado && votoSelecionado !== meuVoto;
 
-  // 3. ECRÃ NORMAL DO VEREADOR
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans select-none">
       <header className="bg-slate-950 border-b border-slate-800 p-4 shadow-md flex justify-between items-center sticky top-0 z-10">
@@ -165,6 +181,22 @@ export default function TerminalVereador() {
           </div>
         )}
 
+        {status === "CHAMADA" && (
+          <div className="flex-1 flex flex-col justify-center max-w-md mx-auto w-full gap-6">
+           <div className="bg-slate-800 p-8 rounded-2xl border border-slate-700 text-center shadow-xl">
+             <CheckSquare className="w-16 h-16 text-blue-500 mx-auto mb-4" />
+             <h2 className="text-2xl font-bold mb-6">Registo de Presença</h2>
+             {presencaConfirmada ? (
+               <div className="bg-green-600 text-white font-bold py-4 rounded-xl text-xl">Presença Registada!</div>
+             ) : (
+               <button onClick={registrarPresenca} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black text-xl py-6 rounded-xl shadow-lg transition-transform active:scale-95">
+                 ESTOU PRESENTE
+               </button>
+             )}
+           </div>
+          </div>
+        )}
+
         {status === "ABERTA" && documento && (
           <div className="flex-1 flex flex-col animate-in zoom-in-95 duration-300">
             <div className="bg-slate-800 rounded-2xl p-6 border-l-4 border-blue-500 shadow-lg mb-8 relative overflow-hidden">
@@ -172,8 +204,8 @@ export default function TerminalVereador() {
                 Em Apreciação
               </div>
               <span className="text-blue-400 font-bold uppercase tracking-wider text-xs mb-2 block">
-                {documento.type.replace('_', ' ')} Nº {documento.protocolNum}/{documento.year}
-              </span>
+  {String(documento.type || documento.tipo || 'MATÉRIA').replace('_', ' ')} Nº {documento.protocolNum || documento.numero || 'S/N'}/{documento.year || new Date().getFullYear()}
+</span>
               <h3 className="text-xl md:text-2xl font-bold text-white leading-snug">"{documento.ementa}"</h3>
             </div>
 

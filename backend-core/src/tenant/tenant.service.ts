@@ -27,4 +27,21 @@ export class TenantService {
       },
     });
   }
+  
+  async listarTodasCamaras() {
+    return await prisma.tenant.findMany({
+      orderBy: { name: 'asc' },
+      include: { _count: { select: { gabinetes: true, users: true } } }
+    });
+  }
+
+  async atualizarModulos(id: string, body: { moduloPlenario?: boolean; moduloAtas?: boolean }) {
+    return await prisma.tenant.update({
+      where: { id },
+      data: {
+        ...(body.moduloPlenario !== undefined && { moduloPlenario: body.moduloPlenario }),
+        ...(body.moduloAtas !== undefined && { moduloAtas: body.moduloAtas }),
+      }
+    });
+  }
 }

@@ -52,6 +52,9 @@ model Tenant {
     cidadeEstado    String? // Ex: "Baraúna-RN"
     artigoIndicacao String? // Ex: "artigo 103, Parágrafo 1º do Regimento Interno"
 
+    moduloPlenario Boolean @default(false)
+    moduloAtas     Boolean @default(false)
+
     logoCabecalho String? @db.Text
     marcaDagua    String? @db.Text
 
@@ -180,12 +183,26 @@ model RegistroVotacao {
 }
 
 model SessaoPauta {
-    id         String   @id @default(uuid())
-    tenantId   String
-    nomeSessao String
-    dataSessao String
-    itens      Json
-    criadoEm   DateTime @default(now())
+    id              String           @id @default(uuid())
+    tenantId        String
+    nomeSessao      String
+    dataSessao      String
+    itens           Json
+    criadoEm        DateTime         @default(now())
+    sessaoPresencas SessaoPresenca[]
 
     @@index([tenantId, criadoEm])
+}
+
+model SessaoPresenca {
+    id            String      @id @default(uuid())
+    tenantId      String
+    sessaoPautaId String
+    sessaoPauta   SessaoPauta @relation(fields: [sessaoPautaId], references: [id])
+    vereadorId    String
+    vereadorNome  String
+    presente      Boolean     @default(false)
+    criadoEm      DateTime    @default(now())
+
+    @@unique([sessaoPautaId, vereadorId])
 }

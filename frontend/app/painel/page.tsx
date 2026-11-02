@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Eye, Download, FileText, Folder, FolderOpen, Building2, MonitorPlay, Vote } from 'lucide-react';
+import { Eye, Download, FileText, Folder, FolderOpen, Building2, MonitorPlay, Vote, Lock } from 'lucide-react';
 
 interface UserAuth {
   name: string;
@@ -71,7 +71,7 @@ export default function Painel() {
 
       <main className="flex-1 p-6 sm:p-10 max-w-7xl mx-auto w-full">
         {user.role === "SUPER_ADMIN" && <SuperAdminDashboard />}
-        {user.role === "SECRETARIA" && <SecretariaDashboard tenantId={user.tenantId} />}
+        {user.role === "SECRETARIA" && <SecretariaDashboard user={user} />}
         {(user.role === "VEREADOR" || user.role === "ASSESSOR") && <GabineteDashboard role={user.role} />}
       </main>
     </div>
@@ -96,15 +96,35 @@ function SuperAdminDashboard() {
   );
 }
 
-function SecretariaDashboard({ tenantId }: { tenantId: string }) {
+function SecretariaDashboard({ user }: { user: UserAuth }) {
+  const tenantId = user.tenantId;
   const [pendentesCount, setPendentesCount] = useState(0);
   const [documentosAgrupados, setDocumentosAgrupados] = useState<AgrupamentoDocs>({});
   const [loadingDocs, setLoadingDocs] = useState(true);
+  
+  const [modulosAtivos, setModulosAtivos] = useState({ plenario: false, atas: false });
   
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
   useEffect(() => {
     let isMounted = true;
+
+    const fetchModulos = async () => {
+      try {
+        const res = await fetch(`${API_URL}/tenant/${tenantId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted) {
+            setModulosAtivos({ 
+              plenario: data.moduloPlenario || false, 
+              atas: data.moduloAtas || false 
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao carregar permissões de módulos:", error);
+      }
+    };
 
     const fetchFila = async () => {
       try {
@@ -130,6 +150,9 @@ function SecretariaDashboard({ tenantId }: { tenantId: string }) {
         if (!response.ok) throw new Error('Erro ao buscar documentos do backend.');
         
         const data: Documento[] = await response.json();
+
+        // ORDENAÇÃO POR PILHA: Mais recentes no topo (baseado em createdAt)
+        data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
         const agrupados = data.reduce((acc, doc) => {
           const nomeGabinete = doc.gabinete?.name || 'Gabinete Não Identificado';
@@ -157,6 +180,7 @@ function SecretariaDashboard({ tenantId }: { tenantId: string }) {
     };
 
     if (tenantId) {
+      fetchModulos();
       fetchFila();
       fetchDocumentosAprovados();
     }
@@ -176,6 +200,7 @@ function SecretariaDashboard({ tenantId }: { tenantId: string }) {
     window.open(pdfUrl, '_blank');
   };
 
+  // CORREÇÃO: Mostra o selo apenas se foi realmente votado ou aprovado em plenário
   const renderStatusBadge = (status: string) => {
     if (status === 'APROVADO_PLENARIO' || status === 'APROVADO') {
       return <span className="bg-green-100 text-green-700 border border-green-200 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ml-2 shadow-sm">Aprovado no Plenário</span>;
@@ -183,7 +208,8 @@ function SecretariaDashboard({ tenantId }: { tenantId: string }) {
     if (status === 'REJEITADO_PLENARIO' || status === 'CANCELADO') {
       return <span className="bg-red-100 text-red-700 border border-red-200 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ml-2 shadow-sm">Rejeitado no Plenário</span>;
     }
-    return <span className="bg-blue-100 text-blue-700 border border-blue-200 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ml-2 shadow-sm">Aguardando Votação</span>;
+    // Caso contrário (ex: criado no gabinete e aprovado pela secretaria mas sem votação realizada ainda), não exibe o selo falso de plenário
+    return null;
   };
 
   return (
@@ -194,18 +220,7 @@ function SecretariaDashboard({ tenantId }: { tenantId: string }) {
       {/* ================= CARDS DA SECRETARIA ================= */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8 mb-12">
           
-          {/* 1. Plenário ao Vivo */}
-          <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-red-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
-            <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-red-600 flex items-center gap-2">
-              Plenário ao Vivo
-            </h3>
-            <p className="text-sm text-gray-500 mb-6 flex-1">Controle a sessão e coloque documentos em votação no telão.</p>
-            <Link href="/painel/sessao" className="block text-center w-full bg-red-50 hover:bg-red-100 text-red-700 py-2.5 rounded-lg font-semibold transition-colors">
-              Abrir Controlo
-            </Link>
-          </div>
-
-          {/* 2. Gestão de Gabinetes */}
+          {/* 1. Gestão de Gabinetes */}
           <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-blue-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
             <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-blue-600">
               Gestão de Gabinetes
@@ -216,8 +231,13 @@ function SecretariaDashboard({ tenantId }: { tenantId: string }) {
             </Link>
           </div>
 
-          {/* 3. Fila de Análise */}
-          <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-yellow-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
+          {/* 2. Fila de Análise com Badge */}
+          <div className="relative group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-yellow-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
+            {pendentesCount > 0 && (
+              <div className="absolute -top-3 -right-3 flex items-center justify-center bg-red-500 text-white text-sm font-black w-8 h-8 rounded-full shadow-lg animate-bounce border-2 border-white z-10">
+                {pendentesCount}
+              </div>
+            )}
             <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-yellow-600">
               Fila de Análise
             </h3>
@@ -227,7 +247,7 @@ function SecretariaDashboard({ tenantId }: { tenantId: string }) {
             </Link>
           </div>
 
-          {/* 4. Pauta da Semana */}
+          {/* 3. Pauta da Semana */}
           <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-green-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
             <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-green-600">
               Pauta da Semana
@@ -238,16 +258,49 @@ function SecretariaDashboard({ tenantId }: { tenantId: string }) {
             </Link>
           </div>
 
-          {/* 5. Atas e Relatórios (Harmonizado com tema pastel índigo) */}
-          <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-indigo-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
-            <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-indigo-600">
-              Atas e Relatórios
-            </h3>
-            <p className="text-sm text-gray-500 mb-6 flex-1">Prepare e edite a Ata Oficial com o histórico de votações da sessão de hoje.</p>
-            <Link href="/painel/ata" className="block text-center w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 py-2.5 rounded-lg font-semibold transition-colors">
-              Preparar Ata da Sessão
-            </Link>
-          </div>
+          {/* 4. Plenário ao Vivo */}
+          {modulosAtivos.plenario ? (
+            <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-red-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
+              <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-red-600 flex items-center gap-2">
+                Plenário ao Vivo
+              </h3>
+              <p className="text-sm text-gray-500 mb-6 flex-1">Controle a sessão e coloque documentos em votação no telão.</p>
+              <Link href="/painel/sessao" className="block text-center w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg font-semibold transition-colors shadow-sm">
+                Abrir Controlo
+              </Link>
+            </div>
+          ) : (
+            <div className="group bg-slate-50 p-6 rounded-xl border border-slate-200 border-t-4 border-t-slate-300 flex flex-col relative overflow-hidden">
+              <div className="absolute top-4 right-4 bg-slate-200 p-2 rounded-full"><Lock className="w-4 h-4 text-slate-500" /></div>
+              <h3 className="font-bold text-xl mb-2 text-slate-500 flex items-center gap-2">Plenário ao Vivo</h3>
+              <p className="text-sm text-slate-400 mb-6 flex-1">Painel eletrónico, cronômetro e votações em tempo real no telão.</p>
+              <a href="https://wa.me/5584999422487" target="_blank" rel="noreferrer" className="block text-center w-full bg-slate-200 hover:bg-slate-300 text-slate-700 py-2.5 rounded-lg font-bold transition-colors text-xs uppercase tracking-wider">
+                Desbloquear Módulo
+              </a>
+            </div>
+          )}
+
+          {/* 5. Atas e Relatórios */}
+          {modulosAtivos.atas ? (
+            <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-indigo-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
+              <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-indigo-600">
+                Atas e Relatórios
+              </h3>
+              <p className="text-sm text-gray-500 mb-6 flex-1">Prepare e edite a Ata Oficial com o histórico de votações da sessão de hoje.</p>
+              <Link href="/painel/ata" className="block text-center w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg font-semibold transition-colors shadow-sm">
+                Preparar Ata da Sessão
+              </Link>
+            </div>
+          ) : (
+            <div className="group bg-slate-50 p-6 rounded-xl border border-slate-200 border-t-4 border-t-slate-300 flex flex-col relative overflow-hidden">
+              <div className="absolute top-4 right-4 bg-slate-200 p-2 rounded-full"><Lock className="w-4 h-4 text-slate-500" /></div>
+              <h3 className="font-bold text-xl mb-2 text-slate-500 flex items-center gap-2">Atas e Relatórios</h3>
+              <p className="text-sm text-slate-400 mb-6 flex-1">Geração automática de Atas em PDF com histórico de votações.</p>
+              <a href="https://wa.me/5584999422487" target="_blank" rel="noreferrer" className="block text-center w-full bg-slate-200 hover:bg-slate-300 text-slate-700 py-2.5 rounded-lg font-bold transition-colors text-xs uppercase tracking-wider">
+                Desbloquear Módulo
+              </a>
+            </div>
+          )}
 
           {/* 6. Configurações */}
           <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-purple-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">

@@ -14,4 +14,17 @@ export class TenantController {
   updateSettings(@Param('id') id: string, @Body() body: any) {
     return this.tenantService.updateSettings(id, body);
   }
+
+  @Get()
+  async listarTodasCamaras() {
+    return this.tenantService.listarTodasCamaras();
+  }
+
+  @Patch(':id/modulos')
+  async atualizarModulos(
+    @Param('id') id: string,
+    @Body() body: { moduloPlenario?: boolean; moduloAtas?: boolean }
+  ) {
+    return this.tenantService.atualizarModulos(id, body);
+  }
 }

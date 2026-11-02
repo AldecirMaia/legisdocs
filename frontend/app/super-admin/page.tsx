@@ -2,12 +2,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { MonitorPlay, FileText } from "lucide-react"; // Adicionados ícones dos módulos
 
 interface Tenant {
   id: string;
   name: string;
   slug: string;
   isActive: boolean;
+  moduloPlenario?: boolean; // Novo campo
+  moduloAtas?: boolean; // Novo campo
   _count?: { gabinetes: number; users: number };
 }
 
@@ -26,6 +29,8 @@ export default function SuperAdminDashboard() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  
+  const [updatingModule, setUpdatingModule] = useState<string | null>(null); // Estado para os botões dos módulos
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editTenant, setEditTenant] = useState<Tenant | null>(null);
@@ -57,7 +62,13 @@ export default function SuperAdminDashboard() {
   const carregarTenants = async () => {
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/super-admin/tenants`);
-      if (res.ok) setTenants(await res.json());
+      if (res.ok) {
+        setTenants(await res.json());
+      } else {
+        // Fallback caso a sua rota principal antiga falhe, tenta a nova rota criada
+        const resNova = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tenant`);
+        if (resNova.ok) setTenants(await resNova.json());
+      }
     } catch (error) {
       showToast("Erro ao carregar câmaras", "error");
     } finally {
@@ -77,6 +88,32 @@ export default function SuperAdminDashboard() {
   const abrirModalUsuarios = (tenant: Tenant) => {
     setUsersModalTenant(tenant);
     carregarUsuariosDoTenant(tenant.id);
+  };
+
+  // NOVA FUNÇÃO: Alternar os pacotes premium (Upsells)
+  const toggleModulo = async (tenantId: string, modulo: 'moduloPlenario' | 'moduloAtas', valorAtual: boolean) => {
+    setUpdatingModule(`${tenantId}-${modulo}`);
+    try {
+      const apiEnv = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const res = await fetch(`${apiEnv}/tenant/${tenantId}/modulos`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [modulo]: !valorAtual })
+      });
+
+      if (res.ok) {
+        showToast("Módulo atualizado com sucesso!", "success");
+        setTenants(prev => prev.map(t => 
+          t.id === tenantId ? { ...t, [modulo]: !valorAtual } : t
+        ));
+      } else {
+        showToast("Erro ao atualizar o módulo.", "error");
+      }
+    } catch (error) {
+      showToast("Falha na comunicação com o servidor.", "error");
+    } finally {
+      setUpdatingModule(null);
+    }
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -176,6 +213,8 @@ export default function SuperAdminDashboard() {
             <thead>
               <tr className="bg-gray-100 text-gray-700 text-sm border-b border-gray-200">
                 <th className="p-4 font-bold">Instituição</th>
+                <th className="p-4 font-bold text-center">Plenário</th>
+                <th className="p-4 font-bold text-center">Atas</th>
                 <th className="p-4 font-bold text-center">Gabinetes</th>
                 <th className="p-4 font-bold text-center">Usuários</th>
                 <th className="p-4 font-bold text-center">Status</th>
@@ -189,15 +228,42 @@ export default function SuperAdminDashboard() {
                     <div className="font-bold text-gray-900">{t.name}</div>
                     <div className="text-xs bg-gray-200 text-gray-800 px-2 py-0.5 rounded font-mono inline-block mt-1">{t.slug}</div>
                   </td>
-                  <td className="p-4 text-center font-bold text-blue-600 text-lg">{t._count?.gabinetes || 0}</td>
-                  <td className="p-4 text-center font-bold text-purple-600 text-lg">{t._count?.users || 0}</td>
+                  
+                  {/* Botão Upsell: Plenário */}
+                  <td className="p-4 text-center align-middle">
+                    <div className="flex flex-col items-center justify-center gap-1">
+                      <button
+                        onClick={() => toggleModulo(t.id, 'moduloPlenario', t.moduloPlenario || false)}
+                        disabled={updatingModule === `${t.id}-moduloPlenario`}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shadow-inner disabled:opacity-50 ${t.moduloPlenario ? 'bg-green-500' : 'bg-gray-300'}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${t.moduloPlenario ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+                  </td>
+
+                  {/* Botão Upsell: Atas */}
+                  <td className="p-4 text-center align-middle">
+                    <div className="flex flex-col items-center justify-center gap-1">
+                      <button
+                        onClick={() => toggleModulo(t.id, 'moduloAtas', t.moduloAtas || false)}
+                        disabled={updatingModule === `${t.id}-moduloAtas`}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shadow-inner disabled:opacity-50 ${t.moduloAtas ? 'bg-indigo-500' : 'bg-gray-300'}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${t.moduloAtas ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+                  </td>
+
+                  <td className="p-4 text-center font-bold text-gray-600">{t._count?.gabinetes || 0}</td>
+                  <td className="p-4 text-center font-bold text-gray-600">{t._count?.users || 0}</td>
                   <td className="p-4 text-center">
-                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${t.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    <span className={`text-[10px] font-bold px-2 py-1 uppercase rounded-full ${t.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                       {t.isActive ? 'ATIVO' : 'BLOQUEADO'}
                     </span>
                   </td>
                   <td className="p-4 text-right space-x-3">
-                    <button onClick={() => abrirModalUsuarios(t)} className="text-purple-600 font-bold text-sm hover:underline cursor-pointer">Ver Usuários</button>
+                    <button onClick={() => abrirModalUsuarios(t)} className="text-purple-600 font-bold text-sm hover:underline cursor-pointer">Usuários</button>
                     <button onClick={() => { setEditTenant(t); setEditForm({ name: t.name, slug: t.slug }); }} className="text-blue-600 font-bold text-sm hover:underline cursor-pointer">Editar</button>
                     <button onClick={() => setConfirmStatus({ id: t.id, isActive: t.isActive, name: t.name })} className={`${t.isActive ? 'text-red-600' : 'text-green-600'} font-bold text-sm hover:underline cursor-pointer`}>
                       {t.isActive ? 'Bloquear' : 'Liberar'}
@@ -282,7 +348,6 @@ export default function SuperAdminDashboard() {
         </div>
       )}
 
-      {/* OS MODAIS ORIGINAIS (CRIAR, EDITAR, STATUS DO TENANT) MANTÊM-SE IGUAIS AO CÓDIGO ANTERIOR */}
       {/* MODAL STATUS TENANT */}
       {confirmStatus && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
