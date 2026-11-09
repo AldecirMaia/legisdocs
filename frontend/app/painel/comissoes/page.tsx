@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { LayoutGrid, Clock, UserCircle, Filter, Inbox, UserCog, Gavel, CheckCircle2, ArrowLeft, FileSignature, Edit3, CheckSquare, Plus, Eye, Download, FileDown } from "lucide-react";
 import Link from "next/link";
@@ -13,6 +14,7 @@ const colunasBase = {
 };
 
 export default function KanbanComissoes() {
+  const router = useRouter();
   const [colunas, setColunas] = useState<any>(colunasBase);
   const [comissoes, setComissoes] = useState<any[]>([]);
   const [comissaoSelecionada, setComissaoSelecionada] = useState<string>("");
@@ -32,7 +34,7 @@ export default function KanbanComissoes() {
   // Modal de Despacho (Secretaria)
   const [showModalDespacho, setShowModalDespacho] = useState(false);
   const [documentosDisponiveis, setDocumentosDisponiveis] = useState<any[]>([]);
-  const [filtroDataDespacho, setFiltroDataDespacho] = useState(""); // NOVO: Filtro de data
+  const [filtroDataDespacho, setFiltroDataDespacho] = useState("");
   const [documentoSelecionado, setDocumentoSelecionado] = useState("");
   const [comissaoAlvoDespacho, setComissaoAlvoDespacho] = useState("");
   const [prazoDespacho, setPrazoDespacho] = useState(15); 
@@ -59,6 +61,22 @@ export default function KanbanComissoes() {
 
       const apiEnv = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
       
+      // VERIFICAÇÃO DE SEGURANÇA: Módulo Comissões Ativo?
+      const token = localStorage.getItem("legisdocs_token");
+const resTenant = await fetch(`${apiEnv}/tenant/${user.tenantId}`, {
+  headers: { 
+    'Authorization': `Bearer ${token}` 
+  }
+});
+      if (resTenant.ok) {
+        const tenantData = await resTenant.json();
+        if (!tenantData.moduloComissoes) {
+          alert("O Módulo de Comissões não está contratado/ativo para a sua instituição.");
+          router.push("/painel");
+          return;
+        }
+      }
+
       const resComissoes = await fetch(`${apiEnv}/comissoes/list/${user.tenantId}`);
       const comissoesData = await resComissoes.json();
       
@@ -125,7 +143,7 @@ export default function KanbanComissoes() {
         const docs = await res.json();
         setDocumentosDisponiveis(Array.isArray(docs) ? docs : []);
       }
-      setFiltroDataDespacho(""); // Reseta o filtro ao abrir
+      setFiltroDataDespacho("");
       setDocumentoSelecionado("");
       setComissaoAlvoDespacho(comissaoSelecionada || (comissoes[0]?.id || ""));
       setPrazoDespacho(15); 
@@ -135,12 +153,8 @@ export default function KanbanComissoes() {
     }
   };
 
-  // Filtragem local baseada no input type="month"
   const documentosFiltradosParaDespacho = documentosDisponiveis.filter(doc => {
     if (!filtroDataDespacho) return true;
-    
-    // Se a data de criação existir (ex: 2026-10-15T...), filtramos por ela. 
-    // Se não, fazemos um fallback pro campo 'year' do documento.
     if (doc.createdAt) {
       return doc.createdAt.startsWith(filtroDataDespacho);
     }
@@ -243,7 +257,6 @@ export default function KanbanComissoes() {
     }
   };
 
-  // NOVO: Função para baixar/visualizar o PDF original do Projeto de Lei
   const baixarProjetoOriginal = (doc: any) => {
     if (doc?.fileUrl) {
       window.open(doc.fileUrl, '_blank');
@@ -454,7 +467,6 @@ export default function KanbanComissoes() {
                                   snapshot.isDragging ? "shadow-2xl shadow-blue-900/10 rotate-2 scale-105 ring-2 ring-blue-500 cursor-grabbing" : "shadow-sm hover:border-blue-400"
                                 }`}
                               >
-                                {/* CABEÇALHO DO CARD COM BOTÃO DE VER PROJETO ORIGINAL */}
                                 <div className="flex justify-between items-start mb-3">
                                   <div className="flex flex-col gap-1">
                                     <span className="text-[10px] font-black tracking-widest text-slate-600 bg-slate-100 px-2 py-1 rounded border border-slate-200 w-max">
@@ -615,8 +627,6 @@ export default function KanbanComissoes() {
             <p className="text-sm text-slate-500 mb-4 font-medium">A Secretaria define qual comissão receberá o projeto, qual o projeto e o prazo regimental.</p>
             
             <div className="flex flex-col gap-4">
-              
-              {/* CAMPO NOVO: FILTRO DE DATA */}
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Filtro de Data (Mês/Ano)</label>
                 <input 

@@ -2,15 +2,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { MonitorPlay, FileText } from "lucide-react"; // Adicionados ícones dos módulos
 
 interface Tenant {
   id: string;
   name: string;
   slug: string;
   isActive: boolean;
-  moduloPlenario?: boolean; // Novo campo
-  moduloAtas?: boolean; // Novo campo
+  moduloPlenario?: boolean; 
+  moduloAtas?: boolean; 
+  moduloComissoes?: boolean;
   _count?: { gabinetes: number; users: number };
 }
 
@@ -30,7 +30,7 @@ export default function SuperAdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   
-  const [updatingModule, setUpdatingModule] = useState<string | null>(null); // Estado para os botões dos módulos
+  const [updatingModule, setUpdatingModule] = useState<string | null>(null);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editTenant, setEditTenant] = useState<Tenant | null>(null);
@@ -64,10 +64,6 @@ export default function SuperAdminDashboard() {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/super-admin/tenants`);
       if (res.ok) {
         setTenants(await res.json());
-      } else {
-        // Fallback caso a sua rota principal antiga falhe, tenta a nova rota criada
-        const resNova = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tenant`);
-        if (resNova.ok) setTenants(await resNova.json());
       }
     } catch (error) {
       showToast("Erro ao carregar câmaras", "error");
@@ -90,21 +86,23 @@ export default function SuperAdminDashboard() {
     carregarUsuariosDoTenant(tenant.id);
   };
 
-  // NOVA FUNÇÃO: Alternar os pacotes premium (Upsells)
-  const toggleModulo = async (tenantId: string, modulo: 'moduloPlenario' | 'moduloAtas', valorAtual: boolean) => {
+  const toggleModulo = async (tenantId: string, modulo: 'moduloPlenario' | 'moduloAtas' | 'moduloComissoes', valorAtual: boolean) => {
     setUpdatingModule(`${tenantId}-${modulo}`);
     try {
-      const apiEnv = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      const res = await fetch(`${apiEnv}/tenant/${tenantId}/modulos`, {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const novoValor = !valorAtual;
+
+      // URL corrigida para bater na nova rota do SuperAdminController
+      const res = await fetch(`${apiUrl}/super-admin/tenants/${tenantId}/modulos`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [modulo]: !valorAtual })
+        body: JSON.stringify({ [modulo]: novoValor })
       });
 
       if (res.ok) {
         showToast("Módulo atualizado com sucesso!", "success");
         setTenants(prev => prev.map(t => 
-          t.id === tenantId ? { ...t, [modulo]: !valorAtual } : t
+          t.id === tenantId ? { ...t, [modulo]: novoValor } : t
         ));
       } else {
         showToast("Erro ao atualizar o módulo.", "error");
@@ -215,6 +213,7 @@ export default function SuperAdminDashboard() {
                 <th className="p-4 font-bold">Instituição</th>
                 <th className="p-4 font-bold text-center">Plenário</th>
                 <th className="p-4 font-bold text-center">Atas</th>
+                <th className="p-4 font-bold text-center">Comissões</th>
                 <th className="p-4 font-bold text-center">Gabinetes</th>
                 <th className="p-4 font-bold text-center">Usuários</th>
                 <th className="p-4 font-bold text-center">Status</th>
@@ -229,7 +228,6 @@ export default function SuperAdminDashboard() {
                     <div className="text-xs bg-gray-200 text-gray-800 px-2 py-0.5 rounded font-mono inline-block mt-1">{t.slug}</div>
                   </td>
                   
-                  {/* Botão Upsell: Plenário */}
                   <td className="p-4 text-center align-middle">
                     <div className="flex flex-col items-center justify-center gap-1">
                       <button
@@ -242,7 +240,6 @@ export default function SuperAdminDashboard() {
                     </div>
                   </td>
 
-                  {/* Botão Upsell: Atas */}
                   <td className="p-4 text-center align-middle">
                     <div className="flex flex-col items-center justify-center gap-1">
                       <button
@@ -251,6 +248,18 @@ export default function SuperAdminDashboard() {
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shadow-inner disabled:opacity-50 ${t.moduloAtas ? 'bg-indigo-500' : 'bg-gray-300'}`}
                       >
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${t.moduloAtas ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+                  </td>
+
+                  <td className="p-4 text-center align-middle">
+                    <div className="flex flex-col items-center justify-center gap-1">
+                      <button
+                        onClick={() => toggleModulo(t.id, 'moduloComissoes', t.moduloComissoes || false)}
+                        disabled={updatingModule === `${t.id}-moduloComissoes`}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shadow-inner disabled:opacity-50 ${t.moduloComissoes ? 'bg-amber-500' : 'bg-gray-300'}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${t.moduloComissoes ? 'translate-x-6' : 'translate-x-1'}`} />
                       </button>
                     </div>
                   </td>
@@ -276,7 +285,6 @@ export default function SuperAdminDashboard() {
         </div>
       </main>
 
-      {/* MODAL GESTÃO DE USUÁRIOS DO TENANT */}
       {usersModalTenant && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-40">
           <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-5xl max-h-[90vh] flex flex-col">
@@ -333,7 +341,6 @@ export default function SuperAdminDashboard() {
         </div>
       )}
 
-      {/* MODAL SENHA USUÁRIO INDIVIDUAL */}
       {passwordUser && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
           <form onSubmit={handleChangeUserPassword} className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm">
@@ -348,7 +355,6 @@ export default function SuperAdminDashboard() {
         </div>
       )}
 
-      {/* MODAL STATUS TENANT */}
       {confirmStatus && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm">
@@ -362,7 +368,6 @@ export default function SuperAdminDashboard() {
         </div>
       )}
       
-      {/* MODAL CRIAR TENANT */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <form onSubmit={handleCreate} className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg">
@@ -382,7 +387,6 @@ export default function SuperAdminDashboard() {
         </div>
       )}
 
-      {/* MODAL EDITAR TENANT */}
       {editTenant && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <form onSubmit={handleEdit} className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm">

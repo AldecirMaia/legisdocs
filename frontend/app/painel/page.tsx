@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Eye, Download, FileText, Folder, FolderOpen, Building2, MonitorPlay, Vote, Lock, Users } from 'lucide-react';
+
 interface UserAuth {
   name: string;
   role: string;
@@ -71,7 +72,7 @@ export default function Painel() {
       <main className="flex-1 p-6 sm:p-10 max-w-7xl mx-auto w-full">
         {user.role === "SUPER_ADMIN" && <SuperAdminDashboard />}
         {user.role === "SECRETARIA" && <SecretariaDashboard user={user} />}
-        {(user.role === "VEREADOR" || user.role === "ASSESSOR") && <GabineteDashboard role={user.role} />}
+        {(user.role === "VEREADOR" || user.role === "ASSESSOR") && <GabineteDashboard user={user} />}
       </main>
     </div>
   );
@@ -101,7 +102,7 @@ function SecretariaDashboard({ user }: { user: UserAuth }) {
   const [documentosAgrupados, setDocumentosAgrupados] = useState<AgrupamentoDocs>({});
   const [loadingDocs, setLoadingDocs] = useState(true);
   
-  const [modulosAtivos, setModulosAtivos] = useState({ plenario: false, atas: false });
+  const [modulosAtivos, setModulosAtivos] = useState({ plenario: false, atas: false, comissoes: false });
   
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -110,13 +111,21 @@ function SecretariaDashboard({ user }: { user: UserAuth }) {
 
     const fetchModulos = async () => {
       try {
-        const res = await fetch(`${API_URL}/tenant/${tenantId}`);
+        const token = localStorage.getItem("legisdocs_token");
+const res = await fetch(`${API_URL}/tenant/${tenantId}`, {
+  headers: { 
+    'Authorization': `Bearer ${token}`,
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache'
+  }
+});
         if (res.ok) {
           const data = await res.json();
           if (isMounted) {
             setModulosAtivos({ 
               plenario: data.moduloPlenario || false, 
-              atas: data.moduloAtas || false 
+              atas: data.moduloAtas || false,
+              comissoes: data.moduloComissoes || false
             });
           }
         }
@@ -150,7 +159,6 @@ function SecretariaDashboard({ user }: { user: UserAuth }) {
         
         const data: Documento[] = await response.json();
 
-        // ORDENAÇÃO POR PILHA: Mais recentes no topo (baseado em createdAt)
         data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
         const agrupados = data.reduce((acc, doc) => {
@@ -215,47 +223,48 @@ function SecretariaDashboard({ user }: { user: UserAuth }) {
       <p className="text-gray-600 mb-8">Faça a gestão da Câmara, gabinetes e pauta de sessões.</p>
       
       {/* ================= CARDS DA SECRETARIA ================= */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8 mb-12">
-          
-          {/* 1. Gestão de Gabinetes */}
-          <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-blue-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
-            <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-blue-600">
-              Gestão de Gabinetes
-            </h3>
-            <p className="text-sm text-gray-500 mb-6 flex-1">Crie novos gabinetes, registe vereadores e liberte acessos.</p>
-            <Link href="/painel/gabinetes" className="block text-center w-full bg-blue-50 hover:bg-blue-100 text-blue-700 py-2.5 rounded-lg font-semibold transition-colors">
-              Gerir Gabinetes
-            </Link>
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8 mb-12">
+        
+        {/* 1. Gestão de Gabinetes */}
+        <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-blue-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
+          <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-blue-600">
+            Gestão de Gabinetes
+          </h3>
+          <p className="text-sm text-gray-500 mb-6 flex-1">Crie novos gabinetes, registe vereadores e liberte acessos.</p>
+          <Link href="/painel/gabinetes" className="block text-center w-full bg-blue-50 hover:bg-blue-100 text-blue-700 py-2.5 rounded-lg font-semibold transition-colors">
+            Gerir Gabinetes
+          </Link>
+        </div>
 
-          {/* 2. Fila de Análise com Badge */}
-          <div className="relative group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-yellow-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
-            {pendentesCount > 0 && (
-              <div className="absolute -top-3 -right-3 flex items-center justify-center bg-red-500 text-white text-sm font-black w-8 h-8 rounded-full shadow-lg animate-bounce border-2 border-white z-10">
-                {pendentesCount}
-              </div>
-            )}
-            <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-yellow-600">
-              Fila de Análise
-            </h3>
-            <p className="text-sm text-gray-500 mb-6 flex-1">Aprove ou mande refazer as indicações e requerimentos recebidos.</p>
-            <Link href="/painel/analise" className="block text-center w-full bg-yellow-50 hover:bg-yellow-100 text-yellow-700 py-2.5 rounded-lg font-semibold transition-colors">
-              Ver Documentos
-            </Link>
-          </div>
+        {/* 2. Fila de Análise */}
+        <div className="relative group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-yellow-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
+          {pendentesCount > 0 && (
+            <div className="absolute -top-3 -right-3 flex items-center justify-center bg-red-500 text-white text-sm font-black w-8 h-8 rounded-full shadow-lg animate-bounce border-2 border-white z-10">
+              {pendentesCount}
+            </div>
+          )}
+          <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-yellow-600">
+            Fila de Análise
+          </h3>
+          <p className="text-sm text-gray-500 mb-6 flex-1">Aprove ou mande refazer as indicações e requerimentos recebidos.</p>
+          <Link href="/painel/analise" className="block text-center w-full bg-yellow-50 hover:bg-yellow-100 text-yellow-700 py-2.5 rounded-lg font-semibold transition-colors">
+            Ver Documentos
+          </Link>
+        </div>
 
-          {/* 3. Pauta da Semana */}
-          <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-green-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
-            <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-green-600">
-              Pauta da Semana
-            </h3>
-            <p className="text-sm text-gray-500 mb-6 flex-1">Organize os documentos aprovados e feche a pauta para a sessão.</p>
-            <Link href="/painel/pauta" className="block text-center w-full bg-green-50 hover:bg-green-100 text-green-700 py-2.5 rounded-lg font-semibold transition-colors">
-              Gerir Pauta
-            </Link>
-          </div>
+        {/* 3. Pauta da Semana */}
+        <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-green-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
+          <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-green-600">
+            Pauta da Semana
+          </h3>
+          <p className="text-sm text-gray-500 mb-6 flex-1">Organize os documentos aprovados e feche a pauta para a sessão.</p>
+          <Link href="/painel/pauta" className="block text-center w-full bg-green-50 hover:bg-green-100 text-green-700 py-2.5 rounded-lg font-semibold transition-colors">
+            Gerir Pauta
+          </Link>
+        </div>
 
-          {/* 4. Central das Comissões (Kanban) */}
+        {/* 4. Central das Comissões (Kanban) */}
+        {modulosAtivos.comissoes ? (
           <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-cyan-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
             <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-cyan-600">
               Central das Comissões
@@ -265,8 +274,19 @@ function SecretariaDashboard({ user }: { user: UserAuth }) {
               Abrir Kanban
             </Link>
           </div>
+        ) : (
+          <div className="group bg-slate-50 p-6 rounded-xl border border-slate-200 border-t-4 border-t-slate-300 flex flex-col relative overflow-hidden">
+            <div className="absolute top-4 right-4 bg-slate-200 p-2 rounded-full"><Lock className="w-4 h-4 text-slate-500" /></div>
+            <h3 className="font-bold text-xl mb-2 text-slate-500 flex items-center gap-2">Central das Comissões</h3>
+            <p className="text-sm text-slate-400 mb-6 flex-1">Acompanhe pelo Kanban o andamento e os prazos dos projetos nas comissões.</p>
+            <a href="https://wa.me/5584999422487" target="_blank" rel="noreferrer" className="block text-center w-full bg-slate-200 hover:bg-slate-300 text-slate-700 py-2.5 rounded-lg font-bold transition-colors text-xs uppercase tracking-wider">
+              Desbloquear Módulo
+            </a>
+          </div>
+        )}
 
-          {/* 5. Gestão de Comissões */}
+        {/* 5. Gestão de Comissões */}
+        {modulosAtivos.comissoes ? (
           <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-pink-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
             <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-pink-600">
               Gestão de Comissões
@@ -276,63 +296,73 @@ function SecretariaDashboard({ user }: { user: UserAuth }) {
               Gerir Comissões
             </Link>
           </div>
+        ) : (
+          <div className="group bg-slate-50 p-6 rounded-xl border border-slate-200 border-t-4 border-t-slate-300 flex flex-col relative overflow-hidden">
+            <div className="absolute top-4 right-4 bg-slate-200 p-2 rounded-full"><Lock className="w-4 h-4 text-slate-500" /></div>
+            <h3 className="font-bold text-xl mb-2 text-slate-500 flex items-center gap-2">Gestão de Comissões</h3>
+            <p className="text-sm text-slate-400 mb-6 flex-1">Crie as comissões da Câmara e defina relatores, presidentes e membros.</p>
+            <a href="https://wa.me/5584999422487" target="_blank" rel="noreferrer" className="block text-center w-full bg-slate-200 hover:bg-slate-300 text-slate-700 py-2.5 rounded-lg font-bold transition-colors text-xs uppercase tracking-wider">
+              Desbloquear Módulo
+            </a>
+          </div>
+        )}
 
-          {/* 6. Plenário ao Vivo */}
-          {modulosAtivos.plenario ? (
-            <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-red-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
-              <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-red-600 flex items-center gap-2">
-                Plenário ao Vivo
-              </h3>
-              <p className="text-sm text-gray-500 mb-6 flex-1">Controle a sessão e coloque documentos em votação no telão.</p>
-              <Link href="/painel/sessao" className="block text-center w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg font-semibold transition-colors shadow-sm">
-                Abrir Controlo
-              </Link>
-            </div>
-          ) : (
-            <div className="group bg-slate-50 p-6 rounded-xl border border-slate-200 border-t-4 border-t-slate-300 flex flex-col relative overflow-hidden">
-              <div className="absolute top-4 right-4 bg-slate-200 p-2 rounded-full"><Lock className="w-4 h-4 text-slate-500" /></div>
-              <h3 className="font-bold text-xl mb-2 text-slate-500 flex items-center gap-2">Plenário ao Vivo</h3>
-              <p className="text-sm text-slate-400 mb-6 flex-1">Painel eletrónico, cronômetro e votações em tempo real no telão.</p>
-              <a href="https://wa.me/5584999422487" target="_blank" rel="noreferrer" className="block text-center w-full bg-slate-200 hover:bg-slate-300 text-slate-700 py-2.5 rounded-lg font-bold transition-colors text-xs uppercase tracking-wider">
-                Desbloquear Módulo
-              </a>
-            </div>
-          )}
-
-          {/* 7. Atas e Relatórios */}
-          {modulosAtivos.atas ? (
-            <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-indigo-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
-              <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-indigo-600">
-                Atas e Relatórios
-              </h3>
-              <p className="text-sm text-gray-500 mb-6 flex-1">Prepare e edite a Ata Oficial com o histórico de votações da sessão de hoje.</p>
-              <Link href="/painel/ata" className="block text-center w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg font-semibold transition-colors shadow-sm">
-                Preparar Ata da Sessão
-              </Link>
-            </div>
-          ) : (
-            <div className="group bg-slate-50 p-6 rounded-xl border border-slate-200 border-t-4 border-t-slate-300 flex flex-col relative overflow-hidden">
-              <div className="absolute top-4 right-4 bg-slate-200 p-2 rounded-full"><Lock className="w-4 h-4 text-slate-500" /></div>
-              <h3 className="font-bold text-xl mb-2 text-slate-500 flex items-center gap-2">Atas e Relatórios</h3>
-              <p className="text-sm text-slate-400 mb-6 flex-1">Geração automática de Atas em PDF com histórico de votações.</p>
-              <a href="https://wa.me/5584999422487" target="_blank" rel="noreferrer" className="block text-center w-full bg-slate-200 hover:bg-slate-300 text-slate-700 py-2.5 rounded-lg font-bold transition-colors text-xs uppercase tracking-wider">
-                Desbloquear Módulo
-              </a>
-            </div>
-          )}
-
-          {/* 8. Configurações */}
-          <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-purple-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
-            <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-purple-600">
-              Configurações
+        {/* 6. Plenário ao Vivo */}
+        {modulosAtivos.plenario ? (
+          <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-red-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
+            <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-red-600 flex items-center gap-2">
+              Plenário ao Vivo
             </h3>
-            <p className="text-sm text-gray-500 mb-6 flex-1">Defina o nome da Prefeita, Palácio e regras para gerar PDFs.</p>
-            <Link href="/painel/configuracoes" className="block text-center w-full bg-purple-50 hover:bg-purple-100 text-purple-700 py-2.5 rounded-lg font-semibold transition-colors">
-              Ajustar Parâmetros
+            <p className="text-sm text-gray-500 mb-6 flex-1">Controle a sessão e coloque documentos em votação no telão.</p>
+            <Link href="/painel/sessao" className="block text-center w-full bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-lg font-semibold transition-colors shadow-sm">
+              Abrir Controlo
             </Link>
           </div>
+        ) : (
+          <div className="group bg-slate-50 p-6 rounded-xl border border-slate-200 border-t-4 border-t-slate-300 flex flex-col relative overflow-hidden">
+            <div className="absolute top-4 right-4 bg-slate-200 p-2 rounded-full"><Lock className="w-4 h-4 text-slate-500" /></div>
+            <h3 className="font-bold text-xl mb-2 text-slate-500 flex items-center gap-2">Plenário ao Vivo</h3>
+            <p className="text-sm text-slate-400 mb-6 flex-1">Painel eletrónico, cronômetro e votações em tempo real no telão.</p>
+            <a href="https://wa.me/5584999422487" target="_blank" rel="noreferrer" className="block text-center w-full bg-slate-200 hover:bg-slate-300 text-slate-700 py-2.5 rounded-lg font-bold transition-colors text-xs uppercase tracking-wider">
+              Desbloquear Módulo
+            </a>
+          </div>
+        )}
 
+        {/* 7. Atas e Relatórios */}
+        {modulosAtivos.atas ? (
+          <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-indigo-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
+            <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-indigo-600">
+              Atas e Relatórios
+            </h3>
+            <p className="text-sm text-gray-500 mb-6 flex-1">Prepare e edite a Ata Oficial com o histórico de votações da sessão de hoje.</p>
+            <Link href="/painel/ata" className="block text-center w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg font-semibold transition-colors shadow-sm">
+              Preparar Ata da Sessão
+            </Link>
+          </div>
+        ) : (
+          <div className="group bg-slate-50 p-6 rounded-xl border border-slate-200 border-t-4 border-t-slate-300 flex flex-col relative overflow-hidden">
+            <div className="absolute top-4 right-4 bg-slate-200 p-2 rounded-full"><Lock className="w-4 h-4 text-slate-500" /></div>
+            <h3 className="font-bold text-xl mb-2 text-slate-500 flex items-center gap-2">Atas e Relatórios</h3>
+            <p className="text-sm text-slate-400 mb-6 flex-1">Geração automática de Atas em PDF com histórico de votações.</p>
+            <a href="https://wa.me/5584999422487" target="_blank" rel="noreferrer" className="block text-center w-full bg-slate-200 hover:bg-slate-300 text-slate-700 py-2.5 rounded-lg font-bold transition-colors text-xs uppercase tracking-wider">
+              Desbloquear Módulo
+            </a>
+          </div>
+        )}
+
+        {/* 8. Configurações */}
+        <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-purple-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
+          <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-purple-600">
+            Configurações
+          </h3>
+          <p className="text-sm text-gray-500 mb-6 flex-1">Defina o nome da Prefeita, Palácio e regras para gerar PDFs.</p>
+          <Link href="/painel/configuracoes" className="block text-center w-full bg-purple-50 hover:bg-purple-100 text-purple-700 py-2.5 rounded-lg font-semibold transition-colors">
+            Ajustar Parâmetros
+          </Link>
         </div>
+
+      </div>
 
       <hr className="my-10 border-gray-200" />
 
@@ -425,7 +455,27 @@ function SecretariaDashboard({ user }: { user: UserAuth }) {
   );
 }
 
-function GabineteDashboard({ role }: { role: string }) {
+function GabineteDashboard({ user }: { user: UserAuth }) {
+  const role = user.role;
+  const tenantId = user.tenantId;
+  const [moduloComissoes, setModuloComissoes] = useState(false);
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+  useEffect(() => {
+    const fetchModulos = async () => {
+      try {
+        const res = await fetch(`${API_URL}/tenant/${tenantId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setModuloComissoes(data.moduloComissoes || false);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar permissões de módulos:", error);
+      }
+    };
+    if (tenantId) fetchModulos();
+  }, [tenantId, API_URL]);
+
   return (
     <div>
       <h2 className="text-3xl font-bold text-gray-800 mb-6">Meu Gabinete</h2>
@@ -447,15 +497,27 @@ function GabineteDashboard({ role }: { role: string }) {
           <Link href="/painel/indicacao/nova" className="block text-center w-full bg-blue-50 text-blue-700 py-2.5 rounded-lg font-semibold hover:bg-blue-100 transition-colors">Criar Documento</Link>
         </div>
 
-        {/* NOVO CARD: MINHAS COMISSÕES */}
-        <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-cyan-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col relative">
-          {/* Futuro badge de alerta de parecer pendente pode entrar aqui */}
-          <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-cyan-600 flex items-center gap-2">
-            <Users className="w-5 h-5 text-cyan-600" /> Comissões
-          </h3>
-          <p className="text-sm text-gray-500 mb-6 flex-1">Acompanhe projetos, emita pareceres e assine deliberações conjuntas.</p>
-          <Link href="/painel/comissoes" className="block text-center w-full bg-cyan-50 text-cyan-700 py-2.5 rounded-lg font-semibold hover:bg-cyan-100 transition-colors">Acessar Kanban</Link>
-        </div>
+        {/* MINHAS COMISSÕES (COM TRAVA DE UPSSELL) */}
+        {moduloComissoes ? (
+          <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-cyan-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col relative">
+            <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-cyan-600 flex items-center gap-2">
+              <Users className="w-5 h-5 text-cyan-600" /> Comissões
+            </h3>
+            <p className="text-sm text-gray-500 mb-6 flex-1">Acompanhe projetos, emita pareceres e assine deliberações conjuntas.</p>
+            <Link href="/painel/comissoes" className="block text-center w-full bg-cyan-50 text-cyan-700 py-2.5 rounded-lg font-semibold hover:bg-cyan-100 transition-colors">Acessar Kanban</Link>
+          </div>
+        ) : (
+          <div className="group bg-slate-50 p-6 rounded-xl border border-slate-200 border-t-4 border-t-slate-300 flex flex-col relative overflow-hidden">
+            <div className="absolute top-4 right-4 bg-slate-200 p-2 rounded-full"><Lock className="w-4 h-4 text-slate-500" /></div>
+            <h3 className="font-bold text-xl mb-2 text-slate-500 flex items-center gap-2">
+              <Users className="w-5 h-5 text-slate-400" /> Comissões
+            </h3>
+            <p className="text-sm text-slate-400 mb-6 flex-1">Acompanhe projetos, emita pareceres e assine deliberações conjuntas.</p>
+            <a href="https://wa.me/5584999422487" target="_blank" rel="noreferrer" className="block text-center w-full bg-slate-200 hover:bg-slate-300 text-slate-700 py-2.5 rounded-lg font-bold transition-colors text-xs uppercase tracking-wider">
+              Desbloquear Módulo
+            </a>
+          </div>
+        )}
 
         <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-gray-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
           <h3 className="font-bold text-xl mb-2 text-gray-800">Histórico</h3>

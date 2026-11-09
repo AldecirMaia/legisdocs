@@ -75,8 +75,9 @@ model Tenant {
     cidadeEstado    String? // Ex: "Baraúna-RN"
     artigoIndicacao String? // Ex: "artigo 103, Parágrafo 1º do Regimento Interno"
 
-    moduloPlenario Boolean @default(false)
-    moduloAtas     Boolean @default(false)
+    moduloPlenario  Boolean @default(false)
+    moduloAtas      Boolean @default(false)
+    moduloComissoes Boolean @default(true)
 
     logoCabecalho String? @db.Text
     marcaDagua    String? @db.Text
