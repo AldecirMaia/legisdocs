@@ -2,8 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Eye, Download, FileText, Folder, FolderOpen, Building2, MonitorPlay, Vote, Lock } from 'lucide-react';
-
+import { Eye, Download, FileText, Folder, FolderOpen, Building2, MonitorPlay, Vote, Lock, Users } from 'lucide-react';
 interface UserAuth {
   name: string;
   role: string;
@@ -200,7 +199,6 @@ function SecretariaDashboard({ user }: { user: UserAuth }) {
     window.open(pdfUrl, '_blank');
   };
 
-  // CORREÇÃO: Mostra o selo apenas se foi realmente votado ou aprovado em plenário
   const renderStatusBadge = (status: string) => {
     if (status === 'APROVADO_PLENARIO' || status === 'APROVADO') {
       return <span className="bg-green-100 text-green-700 border border-green-200 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ml-2 shadow-sm">Aprovado no Plenário</span>;
@@ -208,7 +206,6 @@ function SecretariaDashboard({ user }: { user: UserAuth }) {
     if (status === 'REJEITADO_PLENARIO' || status === 'CANCELADO') {
       return <span className="bg-red-100 text-red-700 border border-red-200 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ml-2 shadow-sm">Rejeitado no Plenário</span>;
     }
-    // Caso contrário (ex: criado no gabinete e aprovado pela secretaria mas sem votação realizada ainda), não exibe o selo falso de plenário
     return null;
   };
 
@@ -258,7 +255,29 @@ function SecretariaDashboard({ user }: { user: UserAuth }) {
             </Link>
           </div>
 
-          {/* 4. Plenário ao Vivo */}
+          {/* 4. Central das Comissões (Kanban) */}
+          <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-cyan-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
+            <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-cyan-600">
+              Central das Comissões
+            </h3>
+            <p className="text-sm text-gray-500 mb-6 flex-1">Acompanhe pelo Kanban o andamento e os prazos dos projetos nas comissões.</p>
+            <Link href="/painel/comissoes" className="block text-center w-full bg-cyan-50 hover:bg-cyan-100 text-cyan-700 py-2.5 rounded-lg font-semibold transition-colors">
+              Abrir Kanban
+            </Link>
+          </div>
+
+          {/* 5. Gestão de Comissões */}
+          <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-pink-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
+            <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-pink-600">
+              Gestão de Comissões
+            </h3>
+            <p className="text-sm text-gray-500 mb-6 flex-1">Crie as comissões da Câmara e defina relatores, presidentes e membros.</p>
+            <Link href="/painel/secretaria/comissoes" className="block text-center w-full bg-pink-50 hover:bg-pink-100 text-pink-700 py-2.5 rounded-lg font-semibold transition-colors">
+              Gerir Comissões
+            </Link>
+          </div>
+
+          {/* 6. Plenário ao Vivo */}
           {modulosAtivos.plenario ? (
             <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-red-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
               <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-red-600 flex items-center gap-2">
@@ -280,7 +299,7 @@ function SecretariaDashboard({ user }: { user: UserAuth }) {
             </div>
           )}
 
-          {/* 5. Atas e Relatórios */}
+          {/* 7. Atas e Relatórios */}
           {modulosAtivos.atas ? (
             <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-indigo-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
               <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-indigo-600">
@@ -302,7 +321,7 @@ function SecretariaDashboard({ user }: { user: UserAuth }) {
             </div>
           )}
 
-          {/* 6. Configurações */}
+          {/* 8. Configurações */}
           <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-purple-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
             <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-purple-600">
               Configurações
@@ -410,28 +429,38 @@ function GabineteDashboard({ role }: { role: string }) {
   return (
     <div>
       <h2 className="text-3xl font-bold text-gray-800 mb-6">Meu Gabinete</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         
         {role === "VEREADOR" && (
-          <div className="group bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-800 border-t-4 border-t-green-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg">
+          <div className="group bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-800 border-t-4 border-t-green-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg flex flex-col">
             <h3 className="font-bold text-xl mb-2 text-white group-hover:text-green-400 flex items-center gap-2">
               <Vote className="w-5 h-5" /> Painel de Votação
             </h3>
-            <p className="text-sm text-slate-400 mb-6 min-h-[40px]">Terminal exclusivo para cravar o seu voto nas sessões plenárias.</p>
+            <p className="text-sm text-slate-400 mb-6 flex-1">Terminal exclusivo para cravar o seu voto nas sessões plenárias.</p>
             <Link href="/painel/terminal" className="block text-center w-full bg-green-600 text-white hover:bg-green-500 py-2.5 rounded-lg font-bold transition-colors">Entrar na Sessão</Link>
           </div>
         )}
 
-        <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-blue-600 transition-all duration-200 hover:-translate-y-1 hover:shadow-md">
+        <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-blue-600 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
           <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-blue-700">Documentos</h3>
-          <p className="text-sm text-gray-500 mb-6 min-h-[40px]">Redija e estruture um novo pedido ao executivo municipal.</p>
-          <Link href="/painel/indicacao/nova" className="block text-center w-full bg-blue-50 text-blue-700 py-2.5 rounded-lg font-semibold">Criar Documento</Link>
+          <p className="text-sm text-gray-500 mb-6 flex-1">Redija e estruture um novo pedido ao executivo municipal.</p>
+          <Link href="/painel/indicacao/nova" className="block text-center w-full bg-blue-50 text-blue-700 py-2.5 rounded-lg font-semibold hover:bg-blue-100 transition-colors">Criar Documento</Link>
         </div>
 
-        <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-gray-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md">
-          <h3 className="font-bold text-xl mb-2 text-gray-800">Rascunhos e Histórico</h3>
-          <p className="text-sm text-gray-500 mb-6 min-h-[40px]">Documentos em andamento, enviados e aprovados pela Secretaria.</p>
-          <Link href="/painel/documentos" className="block text-center w-full bg-gray-50 text-gray-700 py-2.5 rounded-lg font-semibold">Ver Histórico</Link>
+        {/* NOVO CARD: MINHAS COMISSÕES */}
+        <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-cyan-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col relative">
+          {/* Futuro badge de alerta de parecer pendente pode entrar aqui */}
+          <h3 className="font-bold text-xl mb-2 text-gray-800 group-hover:text-cyan-600 flex items-center gap-2">
+            <Users className="w-5 h-5 text-cyan-600" /> Comissões
+          </h3>
+          <p className="text-sm text-gray-500 mb-6 flex-1">Acompanhe projetos, emita pareceres e assine deliberações conjuntas.</p>
+          <Link href="/painel/comissoes" className="block text-center w-full bg-cyan-50 text-cyan-700 py-2.5 rounded-lg font-semibold hover:bg-cyan-100 transition-colors">Acessar Kanban</Link>
+        </div>
+
+        <div className="group bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-t-4 border-t-gray-500 transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col">
+          <h3 className="font-bold text-xl mb-2 text-gray-800">Histórico</h3>
+          <p className="text-sm text-gray-500 mb-6 flex-1">Documentos em andamento, enviados e aprovados pela Secretaria.</p>
+          <Link href="/painel/documentos" className="block text-center w-full bg-gray-50 text-gray-700 py-2.5 rounded-lg font-semibold hover:bg-gray-100 transition-colors">Ver Histórico</Link>
         </div>
       </div>
     </div>

@@ -19,12 +19,13 @@ enum Role {
 enum DocumentType {
     INDICACAO
     REQUERIMENTO
-    PROJETO_LEI
+    PROJETO_LEI_LEGISLATIVO // Substituiu PROJETO_LEI
+    PROJETO_LEI_EXECUTIVO // Novo: Exclusivo da Prefeitura
     OFICIO
     MOCAO
-    PARECER // Novo
-    EMENDA_ADITIVA // Novo
-    EMENDA_IMPOSITIVA // Novo
+    PARECER
+    EMENDA_ADITIVA
+    EMENDA_IMPOSITIVA
 }
 
 enum DocumentStatus {
@@ -34,6 +35,28 @@ enum DocumentStatus {
     REFAZER
     CANCELADO
     APROVADO
+}
+
+enum StatusTramitacao {
+    AGUARDANDO_DESPACHO // Na fila da comissão (To Do) - Precisa de um relator
+    EM_ANALISE // Relator designado, prazo correndo (In Progress)
+    AGUARDANDO_VOTACAO // Relator deu o parecer, comissão vai votar internamente (Review)
+    CONCLUIDO // Parecer emitido e aprovado pela comissão (Done)
+    DEVOLVIDO // Devolvido ao autor para correções
+}
+
+enum CargoComissao {
+    PRESIDENTE
+    VICE_PRESIDENTE
+    RELATOR
+    MEMBRO
+    SUPLENTE
+}
+
+enum TipoVotoParecer {
+    ACOMPANHA_RELATOR
+    DIVERGE_RELATOR
+    ABSTENCAO
 }
 
 // === TABELAS ===
@@ -58,9 +81,9 @@ model Tenant {
     logoCabecalho String? @db.Text
     marcaDagua    String? @db.Text
 
-    enderecoRodape String? // Ex: Rua do Horto Florestal, 506 Centro, Baraúna-RN // CEP: 59.695-000
-    contatoRodape  String? // Ex: http://barauna.rn.leg.br/ // cmb.barauna@gmail.com
-
+    enderecoRodape     String? // Ex: Rua do Horto Florestal, 506 Centro, Baraúna-RN // CEP: 59.695-000
+    contatoRodape      String? // Ex: http://barauna.rn.leg.br/ // cmb.barauna@gmail.com
+    comissoes          Comissao[]
     users              User[]
     gabinetes          Gabinete[]
     documents          Document[]
@@ -92,12 +115,16 @@ model User {
     tenant   Tenant @relation(fields: [tenantId], references: [id])
 
     gabineteId String? // Secretaria e Super Admin não têm gabinete, apenas Vereador/Assessor
-    gabinete   Gabinete? @relation(fields: [gabineteId], references: [id])
+    gabinete   Gabinete?            @relation(fields: [gabineteId], references: [id])
     partido    String?
-    createdAt  DateTime  @default(now())
-    updatedAt  DateTime  @updatedAt
+    createdAt  DateTime             @default(now())
+    updatedAt  DateTime             @updatedAt
+    comissoes  ComissaoMembro[]
+    relatorias TramitacaoComissao[] @relation("RelatorTramitacao")
+    documents  Document[] // Documentos criados por este usuário específico
 
-    documents Document[] // Documentos criados por este usuário específico
+    tramitacaoComissaos TramitacaoComissao[]
+    assinaturaParecers  AssinaturaParecer[]
 }
 
 model Document {
@@ -133,6 +160,8 @@ model Document {
     updatedAt DateTime @updatedAt
     sessaoId  String?
     sessao    Sessao?  @relation(fields: [sessaoId], references: [id])
+
+    tramitacoes TramitacaoComissao[]
 
     @@unique([tenantId, type, protocolNum, year])
     @@index([tenantId])
@@ -205,4 +234,88 @@ model SessaoPresenca {
     criadoEm      DateTime    @default(now())
 
     @@unique([sessaoPautaId, vereadorId])
+}
+
+// === MÓDULO DE COMISSÕES (KANBAN) ===
+
+model Comissao {
+    id       String  @id @default(uuid())
+    nome     String // Ex: "Comissão de Constituição, Justiça e Redação (CCJR)"
+    sigla    String? // Ex: "CCJR"
+    isActive Boolean @default(true)
+
+    tenantId String
+    tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    membros     ComissaoMembro[]
+    tramitacoes TramitacaoComissao[]
+
+    @@index([tenantId])
+}
+
+// Tabela de Junção: Diz quais Vereadores fazem parte de qual Comissão e seus cargos
+model ComissaoMembro {
+    id    String        @id @default(uuid())
+    cargo CargoComissao @default(MEMBRO)
+
+    comissaoId String
+    comissao   Comissao @relation(fields: [comissaoId], references: [id], onDelete: Cascade)
+
+    userId String
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([comissaoId, userId]) // Um vereador só pode ter um cargo por comissão
+}
+
+// Esta é a tabela que representa o "Card" no Kanban do projeto
+model TramitacaoComissao {
+    id              String           @id @default(uuid())
+    status          StatusTramitacao @default(AGUARDANDO_DESPACHO)
+    prazoDias       Int              @default(15)
+    // Controle de Prazos Legais (Geralmente 15 dias)
+    prazoVencimento DateTime?
+
+    // Conclusão
+    resultado    String? // Ex: "FAVORÁVEL", "CONTRÁRIO", "COM_EMENDAS"
+    parecerFinal String? @db.Text
+
+    // Relacionamentos
+    documentId String
+    document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+    comissaoId String
+    comissao   Comissao @relation(fields: [comissaoId], references: [id], onDelete: Cascade)
+
+    // Vereador responsável por ler e emitir o parecer (pode estar vazio no início)
+    relatorId String?
+    relator   User?   @relation("RelatorTramitacao", fields: [relatorId], references: [id])
+
+    createdAt   DateTime            @default(now())
+    updatedAt   DateTime            @updatedAt
+    user        User?               @relation(fields: [userId], references: [id])
+    userId      String?
+    assinaturas AssinaturaParecer[]
+
+    @@index([documentId])
+    @@index([comissaoId])
+}
+
+// Regista a assinatura/voto de cada membro da comissão no Parecer do Relator
+model AssinaturaParecer {
+    id            String          @id @default(uuid())
+    tipoVoto      TipoVotoParecer @default(ACOMPANHA_RELATOR)
+    justificativa String?         @db.Text // Útil se o vereador divergir (Voto em Separado)
+
+    tramitacaoId String
+    tramitacao   TramitacaoComissao @relation(fields: [tramitacaoId], references: [id], onDelete: Cascade)
+
+    vereadorId String
+    vereador   User   @relation(fields: [vereadorId], references: [id], onDelete: Cascade)
+
+    assinadoEm DateTime @default(now())
+
+    @@unique([tramitacaoId, vereadorId]) // Garante que o vereador só assine uma vez neste parecer
 }

@@ -19,7 +19,6 @@ export default function PrepararAta() {
   const [pautaAtiva, setPautaAtiva] = useState<SessaoPautaInfo | null>(null);
   const [historicoPautas, setHistoricoPautas] = useState<SessaoPautaInfo[]>([]);
 
-  // Campos limpos para preenchimento com placeholders dinâmicos
   const [formData, setFormData] = useState({
     numeroSessao: "",
     anoLegislativo: "",
@@ -74,10 +73,21 @@ export default function PrepararAta() {
     setLoading(true);
     try {
       const apiEnv = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+      // Captura os dados vitais guardados pelo ecrã da sessão (quórum)
+      const presencasSalvas = localStorage.getItem("legisdocs_presencas_sessao");
+      const presencas = presencasSalvas ? JSON.parse(presencasSalvas) : [];
+      const dataSessao = localStorage.getItem("legisdocs_data_sessao") || new Date().toISOString();
+
       const res = await fetch(`${apiEnv}/votacao/ata/gerar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId, ...formData })
+        body: JSON.stringify({ 
+          tenantId, 
+          presencas,
+          dataSessao,
+          ...formData 
+        })
       });
 
       if (!res.ok) throw new Error("Erro ao gerar a Ata");
@@ -90,6 +100,11 @@ export default function PrepararAta() {
       document.body.appendChild(a);
       a.click();
       a.remove();
+
+      // Limpa os dados temporários após a geração bem-sucedida
+      localStorage.removeItem("legisdocs_presencas_sessao");
+      localStorage.removeItem("legisdocs_data_sessao");
+
     } catch (error) {
       console.error(error);
       alert("Falha ao gerar o PDF da Ata.");
@@ -112,7 +127,6 @@ export default function PrepararAta() {
 
       <main className="flex-1 p-6 max-w-4xl mx-auto w-full mt-6 space-y-6">
         
-        {/* AVISO DE IDENTIFICAÇÃO DA PAUTA DO DIA */}
         <div className={`rounded-xl p-5 border shadow-sm flex items-start gap-4 ${
           pautaAtiva ? 'bg-green-50 border-green-200 text-green-900' : 'bg-yellow-50 border-yellow-200 text-yellow-900'
         }`}>
@@ -138,7 +152,6 @@ export default function PrepararAta() {
           </div>
         </div>
 
-        {/* FORMULÁRIO DE PARÂMETROS COM PLACEHOLDERS */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
           <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2 border-b pb-4">
             <Settings className="w-5 h-5 text-gray-400" /> Parâmetros do Documento
@@ -193,7 +206,6 @@ export default function PrepararAta() {
           </button>
         </div>
 
-        {/* HISTÓRICO DE ATAS E PAUTAS ANTERIORES */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
           <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2 border-b pb-4">
             <History className="w-5 h-5 text-gray-400" /> Histórico de Sessões Registadas
@@ -244,7 +256,6 @@ export default function PrepararAta() {
             </div>
           )}
         </div>
-
       </main>
     </div>
   );

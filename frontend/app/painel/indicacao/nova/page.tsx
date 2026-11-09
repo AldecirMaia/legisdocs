@@ -172,8 +172,10 @@ const carregarSecretarias = async (tenantId: string) => {
                 className="w-full border border-gray-300 rounded-lg p-3 font-semibold bg-gray-50 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               >
                 <option value="INDICACAO">Indicação Parlamentar</option>
+                <option value="REQUERIMENTO">Requerimento</option>
                 <option value="OFICIO">Ofício</option>
-                <option value="PROJETO_LEI">Projeto de Lei</option>
+                <option value="PROJETO_LEI_LEGISLATIVO">Projeto de Lei (Legislativo)</option>
+                <option value="PROJETO_LEI_EXECUTIVO">Projeto de Lei (Executivo)</option>
                 <option value="MOCAO">Moção (Aplausos, Repúdio)</option>
                 <option value="PARECER">Parecer de Comissão</option>
                 <option value="EMENDA_ADITIVA">Emenda Parlamentar Aditiva</option>

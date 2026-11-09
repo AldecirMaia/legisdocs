@@ -27,7 +27,6 @@ export default function ControloSessao() {
   const [loading, setLoading] = useState(true);
   const [clicadoChamada, setClicadoChamada] = useState(false);
 
-  // Estados de Votação
   const [docSelecionado, setDocSelecionado] = useState<DocPauta | null>(null);
   const [status, setStatus] = useState<"AGUARDANDO" | "ABERTA" | "ENCERRADA">("AGUARDANDO");
   const [votos, setVotos] = useState<Record<string, string>>({});
@@ -35,16 +34,13 @@ export default function ControloSessao() {
   const [abaAtiva, setAbaAtiva] = useState<'PAUTA' | 'PRESENCA' | 'CRONOMETRO'>('PAUTA');
   const [showModalEncerrar, setShowModalEncerrar] = useState(false);
 
-  // ESTADO GLOBAL DA SESSÃO (SUSPENSA, EM ANDAMENTO, ENCERRADA)
   const [estadoSessaoGlobal, setEstadoSessaoGlobal] = useState<"SUSPENSA" | "EM_ANDAMENTO" | "ENCERRADA">("SUSPENSA");
   const [showModalEncerrarSessao, setShowModalEncerrarSessao] = useState(false);
   const [showModalSucessoAta, setShowModalSucessoAta] = useState(false);
 
-  // Estados de Presença / Quórum
   const [presencas, setPresencas] = useState<string[]>([]);
   const [chamadaAtiva, setChamadaAtiva] = useState(false);
 
-  // Estados do Cronômetro e Orador
   const [tempoRestante, setTempoRestante] = useState(300);
   const [timerAtivo, setTimerAtivo] = useState(false);
   const [tipoOrador, setTipoOrador] = useState<"VEREADOR" | "OUTRO">("VEREADOR");
@@ -155,25 +151,10 @@ export default function ControloSessao() {
       socket.emit("atualizarEstadoSessao", { tenantId: user.tenantId, estado: "ENCERRADA" });
     }
 
-    try {
-      const apiEnv = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      await fetch(`${apiEnv}/atas/gerar`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenantId: user.tenantId,
-          presencas: presencas,
-          dataSessao: new Date().toISOString()
-        })
-      });
-      
-      // REMOVIDO: alert("Sessão encerrada...");
-      // ADICIONADO: Aciona o novo modal visual
-      setShowModalSucessoAta(true);
-      
-    } catch (error) {
-      console.error("Erro ao gerar ata:", error);
-    }
+    localStorage.setItem("legisdocs_presencas_sessao", JSON.stringify(presencas));
+    localStorage.setItem("legisdocs_data_sessao", new Date().toISOString());
+
+    setShowModalSucessoAta(true);
   };
 
   useEffect(() => {
@@ -183,7 +164,6 @@ export default function ControloSessao() {
         setTempoRestante((prev) => {
           const novoTempo = prev - 1;
           if (socket && user?.tenantId) {
-            // Em tempo real, mantemos visivel: true
             socket.emit("syncCronometro", { tenantId: user.tenantId, tempo: novoTempo, ativo: true, visivel: true });
             if (novoTempo === 60) socket.emit("alertaCronometro", { tenantId: user.tenantId, tipo: "1_MINUTO" });
             if (novoTempo === 30) socket.emit("alertaCronometro", { tenantId: user.tenantId, tipo: "30_SEGUNDOS" });
@@ -206,7 +186,6 @@ export default function ControloSessao() {
   const handleSetTempo = (segundos: number) => {
     setTimerAtivo(false);
     setTempoRestante(segundos);
-    // Ao clicar num atalho (5m, 10m, Reset), enviamos visivel: false para OCULTAR do Telão
     if (socket && user?.tenantId) {
       socket.emit("syncCronometro", { tenantId: user.tenantId, tempo: segundos, ativo: false, visivel: false });
     }
@@ -230,7 +209,6 @@ export default function ControloSessao() {
       : nomeConvidado || "Convidado";
 
     if (socket && user?.tenantId) {
-      // Ao dar Play, enviamos visivel: true para EXIBIR EM DESTAQUE no Telão
       socket.emit("syncCronometro", { 
         tenantId: user.tenantId, 
         tempo: tempoRestante, 
@@ -275,6 +253,21 @@ export default function ControloSessao() {
     setVotos({});
   };
 
+  // --- LÓGICA DE CÁLCULO DE QUÓRUM E REGRAS ---
+  const getRegraVotacao = (tipo: string, total: number) => {
+    const t = tipo?.toUpperCase() || '';
+    if (t.includes('EMENDA') || t.includes('VETO') || t.includes('CASSAÇÃO')) {
+      return { tipoRegra: 'Maioria Qualificada (2/3)', minQuorum: Math.ceil(total * (2/3)) };
+    }
+    if (t.includes('COMPLEMENTAR')) {
+      return { tipoRegra: 'Maioria Absoluta', minQuorum: Math.floor(total / 2) + 1 };
+    }
+    return { tipoRegra: 'Maioria Simples', minQuorum: Math.floor(total / 2) + 1 }; 
+  };
+
+  const regraAtual = docSelecionado ? getRegraVotacao(docSelecionado.tipo || docSelecionado.type || '', totalVereadores) : null;
+  const quorumAtingido = regraAtual ? presencas.length >= regraAtual.minQuorum : false;
+
   if (loading || !user) return <div className="p-10 text-center text-gray-500 animate-pulse">A preparar sistema de votação...</div>;
 
   return (
@@ -288,8 +281,6 @@ export default function ControloSessao() {
       </header>
 
       <main className="flex-1 p-6 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* COLUNA ESQUERDA - ABAS */}
         <div className="lg:col-span-5 flex flex-col gap-4 h-[85vh]">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2 flex gap-2">
             <button onClick={() => setAbaAtiva('PAUTA')} className={`flex-1 py-2 text-sm font-bold rounded-lg ${abaAtiva === 'PAUTA' ? 'bg-blue-100 text-blue-800' : 'text-gray-500 hover:bg-gray-50'}`}>Matérias</button>
@@ -421,12 +412,10 @@ export default function ControloSessao() {
           </div>
         </div>
 
-        {/* COLUNA DIREITA - PAINEL DE CONTROLO DE VOTAÇÃO */}
         <div className="lg:col-span-7 flex flex-col gap-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 h-full flex flex-col">
             <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2 border-b pb-4"><MonitorPlay className="w-6 h-6 text-blue-600" /> Painel de Comando da Votação</h2>
 
-            {/* CONTROLO DO ESTADO GLOBAL DA SESSÃO */}
             <div className="bg-slate-100 p-4 rounded-xl border border-slate-200 mb-6 flex flex-col gap-3">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Estado Global da Sessão no Telão</span>
               <div className="grid grid-cols-3 gap-2">
@@ -466,9 +455,40 @@ export default function ControloSessao() {
                 </div>
 
                 {status === "AGUARDANDO" && (
-                  <button onClick={handleAbrirVotacao} className="mt-auto w-full bg-green-600 hover:bg-green-700 transition-colors text-white font-black text-lg py-5 rounded-xl shadow-lg flex items-center justify-center gap-3">
-                    <PlayCircle className="w-8 h-8" /> ABRIR VOTAÇÃO NO TELÃO E TERMINAIS
-                  </button>
+                  <div className="mt-auto flex flex-col gap-3">
+                    {/* Alerta de Quórum Visual */}
+                    {regraAtual && !quorumAtingido && (
+                      <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-sm font-bold flex items-center gap-3 animate-pulse">
+                        <AlertTriangle className="w-6 h-6 flex-shrink-0" />
+                        <div>
+                          <p>Quórum insuficiente para abrir votação desta matéria.</p>
+                          <p className="font-medium text-red-600 mt-1">
+                            Regra: {regraAtual.tipoRegra} | Necessário: {regraAtual.minQuorum} presentes | Atuais: {presencas.length}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {regraAtual && quorumAtingido && (
+                       <div className="bg-green-50 border border-green-200 text-green-700 p-3 rounded-xl text-sm font-bold flex items-center gap-2 mb-2">
+                         <CheckCircle className="w-5 h-5" />
+                         Quórum atingido ({regraAtual.tipoRegra}). Necessário {regraAtual.minQuorum}, Presentes: {presencas.length}.
+                       </div>
+                    )}
+
+                    <button 
+                      onClick={handleAbrirVotacao} 
+                      disabled={!quorumAtingido}
+                      className={`w-full transition-all text-white font-black text-lg py-5 rounded-xl shadow-lg flex items-center justify-center gap-3 ${
+                        quorumAtingido 
+                          ? 'bg-green-600 hover:bg-green-700' 
+                          : 'bg-gray-400 cursor-not-allowed opacity-70'
+                      }`}
+                    >
+                      <PlayCircle className="w-8 h-8" /> 
+                      ABRIR VOTAÇÃO NO TELÃO E TERMINAIS
+                    </button>
+                  </div>
                 )}
 
                 {status === "ABERTA" && (
@@ -502,7 +522,6 @@ export default function ControloSessao() {
         </div>
       </main>
 
-      {/* Modal de Encerramento da Matéria */}
       {showModalEncerrar && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200">
@@ -516,7 +535,6 @@ export default function ControloSessao() {
         </div>
       )}
 
-      {/* Modal de Confirmação para Encerramento da Sessão e Envio para Ata */}
       {showModalEncerrarSessao && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200">
@@ -525,16 +543,16 @@ export default function ControloSessao() {
             </div>
             <h3 className="text-2xl font-bold mb-2 text-slate-900">Encerrar Sessão Plenária?</h3>
             <p className="text-gray-600 mb-6 leading-relaxed">
-              Ao encerrar a sessão, a pauta atual será finalizada e os dados consolidados serão enviados diretamente para a criação automática da <strong>Ata</strong>. Deseja prosseguir?
+              Ao encerrar a sessão, a pauta atual será finalizada e será redirecionado para preencher os dados manuais da <strong>Ata</strong>.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setShowModalEncerrarSessao(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 py-3 rounded-xl font-bold transition-colors">Cancelar</button>
-              <button onClick={confirmarEncerramentoSessao} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl shadow-lg transition-colors">Sim, Encerrar e Gerar Ata</button>
+              <button onClick={confirmarEncerramentoSessao} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl shadow-lg transition-colors">Sim, Encerrar Sessão</button>
             </div>
           </div>
         </div>
       )}
-      {/* NOVO: Modal de Sucesso após Encerramento da Sessão */}
+      
       {showModalSucessoAta && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 text-center animate-in zoom-in-95 duration-300">
@@ -543,13 +561,16 @@ export default function ControloSessao() {
             </div>
             <h3 className="text-3xl font-black mb-3 text-slate-900">Sessão Encerrada!</h3>
             <p className="text-gray-600 mb-8 text-lg leading-relaxed">
-              A pauta foi finalizada com sucesso e os dados consolidados já foram enviados para o módulo de Atas.
+              A sessão foi bloqueada no telão. Agora precisa de preencher as informações manuais para gerar o documento da Ata.
             </p>
             <button 
-              onClick={() => setShowModalSucessoAta(false)} 
+              onClick={() => {
+                setShowModalSucessoAta(false);
+                router.push("/painel/ata");
+              }} 
               className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-4 rounded-xl shadow-lg transition-colors text-lg"
             >
-              Concluir
+              📝 Preencher e Gerar Ata
             </button>
           </div>
         </div>

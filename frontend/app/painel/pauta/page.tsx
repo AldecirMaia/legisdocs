@@ -59,7 +59,7 @@ export default function PautaSessao() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<PautaItem | null>(null);
   const [manualForm, setManualForm] = useState<PautaItem>({
-    id: "", type: "PROJETO DE LEI", numero: "000/2026", ementa: "", propositor: "", tramitacao: "LEITURA", regime: "NORMAL", fase: "LEITURA", turnoVotacao: ""
+    id: "", type: "PROJETO_LEI_LEGISLATIVO", numero: "", ementa: "", propositor: "", tramitacao: "LEITURA", regime: "NORMAL", fase: "LEITURA", turnoVotacao: ""
   });
 
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
@@ -68,7 +68,6 @@ export default function PautaSessao() {
   const [showTurnoModal, setShowTurnoModal] = useState(false);
   const [itensParaTurno, setItensParaTurno] = useState<PautaItem[]>([]);
 
-  // ESTADOS PARA MODAIS CUSTOMIZADOS
   const [alertConfig, setAlertConfig] = useState<{ show: boolean, message: string, type: 'success' | 'error' | 'warning' }>({ show: false, message: '', type: 'success' });
   const [showConfirmEnviar, setShowConfirmEnviar] = useState(false);
 
@@ -82,14 +81,21 @@ export default function PautaSessao() {
   };
 
   const formatToPautaItem = (doc: DocPauta): PautaItem => {
-    const typeFormatted = doc.type.replace("_", " ");
+    let typeFormatted = doc.type.replace(/_/g, " ");
+    if (doc.type === "PROJETO_LEI_EXECUTIVO") typeFormatted = "PROJETO DE LEI (PREFEITURA)";
+    if (doc.type === "PROJETO_LEI_LEGISLATIVO") typeFormatted = "PROJETO DE LEI (VEREADOR)";
+
     const isExpediente = ["INDICACAO", "OFICIO", "MOCAO"].includes(doc.type);
     const isLei = isProjetoLei(typeFormatted);
     
     const vereador = doc.gabinete?.users?.find(u => u.role === "VEREADOR");
     const nomeGabineteFormatado = doc.gabinete?.name?.replace(/^Gabinete (do|da|de)?\s*/i, '');
-    const nomePropositor = vereador?.name || nomeGabineteFormatado || doc.author?.name || "N/A";
+    let nomePropositor = vereador?.name || nomeGabineteFormatado || doc.author?.name || "N/A";
     
+    if (doc.type === "PROJETO_LEI_EXECUTIVO") {
+        nomePropositor = "PODER EXECUTIVO (PREFEITURA)";
+    }
+
     return {
       id: doc.id,
       type: typeFormatted,
@@ -99,6 +105,22 @@ export default function PautaSessao() {
       tramitacao: isExpediente || isLei ? "LEITURA" : "VOTAÇÃO",
       ...(isLei && { regime: "NORMAL", fase: "LEITURA" })
     };
+  };
+
+  const calcularProximoNumero = (tipoSelecionado: string) => {
+    const anoAtual = new Date().getFullYear();
+    const docsDoTipo = todosDocumentos.filter(doc => 
+      doc.type === tipoSelecionado && doc.year === anoAtual
+    );
+
+    if (docsDoTipo.length === 0) {
+      return `001/${anoAtual}`;
+    }
+
+    const maiorNumero = Math.max(...docsDoTipo.map(doc => doc.protocolNum));
+    const proximo = maiorNumero + 1;
+    
+    return `${String(proximo).padStart(3, '0')}/${anoAtual}`;
   };
 
   const carregarConfiguracoes = async (tenantId: string) => {
@@ -132,18 +154,29 @@ export default function PautaSessao() {
   };
 
   useEffect(() => {
-    const iniciar = () => {
+    const iniciar = async () => {
       setDataSessao(new Date().toLocaleDateString("pt-BR"));
       const storedUser = localStorage.getItem("legisdocs_user");
       if (!storedUser) return router.push("/");
       const parsedUser = JSON.parse(storedUser);
       if (parsedUser.role !== "SECRETARIA" && parsedUser.role !== "SUPER_ADMIN") return router.push("/painel");
       setUser(parsedUser);
-      carregarPauta(parsedUser.tenantId);
+      
+      await carregarPauta(parsedUser.tenantId);
       carregarConfiguracoes(parsedUser.tenantId);
     };
     iniciar();
   }, [router]);
+
+  // Atualiza o formulário manual assim que os documentos terminam de carregar
+  useEffect(() => {
+    if (!loading && todosDocumentos.length > 0) {
+      setManualForm(prev => ({
+        ...prev,
+        numero: calcularProximoNumero(prev.type)
+      }));
+    }
+  }, [loading, todosDocumentos]);
 
   const aplicarFiltroData = () => {
     if (!dataInicio || !dataFim) return showAlert("Por favor, preencha a Data Inicial e a Data Final.", "warning");
@@ -167,16 +200,74 @@ export default function PautaSessao() {
     }
   };
 
-  const adicionarManual = () => {
+  const adicionarManual = async () => {
     if (!manualForm.ementa.trim()) return showAlert("A ementa/resumo é obrigatória para o item manual.", "warning");
     if (manualForm.tramitacao === "VOTAÇÃO" && !manualForm.turnoVotacao) {
       return showAlert("Por favor, selecione o Turno da Votação para este item.", "warning");
     }
 
-    const novoItem: PautaItem = { ...manualForm, id: "manual-" + Date.now() };
-    setItensPauta(prev => [...prev, novoItem]);
-    setShowAddManual(false);
-    setManualForm({ id: "", type: "PROJETO DE LEI", numero: "000/2026", ementa: "", propositor: "", tramitacao: "LEITURA", regime: "NORMAL", fase: "LEITURA", turnoVotacao: "" });
+    try {
+      // 1. Envia para a base de dados oficial
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/document/create-manual`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: manualForm.type, 
+          ementa: manualForm.ementa,
+          propositorManual: manualForm.propositor,
+          tenantId: user?.tenantId,
+          gabineteId: user?.gabineteId,
+          authorId: user?.id,
+        })
+      });
+
+      if (res.ok) {
+        const docCriado = await res.json();
+        
+        // 2. Formata para exibir imediatamente no ecrã
+        let displayType = docCriado.type.replace(/_/g, " ");
+        if (docCriado.type === "PROJETO_LEI_EXECUTIVO") displayType = "PROJETO DE LEI (PREFEITURA)";
+        if (docCriado.type === "PROJETO_LEI_LEGISLATIVO") displayType = "PROJETO DE LEI (VEREADOR)";
+
+        const novoItem: PautaItem = { 
+          id: docCriado.id, 
+          type: displayType, 
+          numero: `${String(docCriado.protocolNum).padStart(3, '0')}/${docCriado.year}`, 
+          ementa: docCriado.ementa, 
+          propositor: manualForm.propositor || "Mesa Diretora", 
+          tramitacao: manualForm.tramitacao, 
+          regime: "NORMAL", 
+          fase: "LEITURA", 
+          turnoVotacao: manualForm.turnoVotacao 
+        };
+        
+        setItensPauta(prev => [...prev, novoItem]);
+        setShowAddManual(false);
+        
+        // 3. Recarrega a pauta em background para que o cálculo dos números futuros se atualize
+        carregarPauta(user!.tenantId);
+
+        // 4. Limpa o formulário e avisa o utilizador
+        setManualForm({ 
+          id: "", 
+          type: "PROJETO_LEI_LEGISLATIVO", 
+          numero: "", // Ficará preenchido pelo useEffect ao recarregar a pauta
+          ementa: "", 
+          propositor: "", 
+          tramitacao: "LEITURA", 
+          regime: "NORMAL", 
+          fase: "LEITURA", 
+          turnoVotacao: "" 
+        });
+        
+        showAlert("Documento oficializado com sucesso! O número foi reservado no sistema.", "success");
+      } else {
+        showAlert("Erro ao tentar oficializar o documento na base de dados.", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showAlert("Erro de conexão com o servidor.", "error");
+    }
   };
 
   const salvarEdicao = () => {
@@ -185,7 +276,6 @@ export default function PautaSessao() {
       return showAlert("Por favor, selecione o Turno da Votação para gravar a alteração.", "warning");
     }
     
-    // Limpa o turno se voltar para Leitura
     const formFinal = editForm.tramitacao === "LEITURA" ? { ...editForm, turnoVotacao: "" } : editForm;
     
     setItensPauta(prev => prev.map(item => item.id === editForm.id ? formFinal : item));
@@ -258,7 +348,7 @@ export default function PautaSessao() {
   return (
     <div lang="pt-BR" className="min-h-screen bg-gray-50 print:bg-white flex flex-col pb-10">
       
-      {/* MODAL DE ALERTA (Success, Error, Warning) */}
+      {/* MODAL DE ALERTA */}
       {alertConfig.show && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4 animate-in fade-in no-print">
           <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full animate-in zoom-in-95">
@@ -274,7 +364,7 @@ export default function PautaSessao() {
               
               <button 
                 onClick={() => setAlertConfig({ ...alertConfig, show: false })}
-                className={`w-full font-bold py-3 rounded-xl transition-colors ${
+                className={`w-full font-bold py-3 rounded-xl transition-all duration-200 active:scale-95 ${
                   alertConfig.type === 'success' ? 'bg-green-600 hover:bg-green-700 text-white' : 
                   alertConfig.type === 'warning' ? 'bg-yellow-500 hover:bg-yellow-600 text-white' : 
                   'bg-gray-800 hover:bg-gray-900 text-white'
@@ -287,7 +377,7 @@ export default function PautaSessao() {
         </div>
       )}
 
-      {/* MODAL DE CONFIRMAÇÃO DE ENVIO PARA SESSÃO */}
+      {/* MODAL DE CONFIRMAÇÃO DE ENVIO */}
       {showConfirmEnviar && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[140] flex items-center justify-center p-4 animate-in fade-in no-print">
           <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full animate-in zoom-in-95">
@@ -306,13 +396,13 @@ export default function PautaSessao() {
             <div className="flex gap-3">
               <button 
                 onClick={() => setShowConfirmEnviar(false)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3.5 rounded-xl transition-colors"
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3.5 rounded-xl transition-all duration-200 active:scale-95"
               >
                 Cancelar
               </button>
               <button 
                 onClick={executarEnvioPauta}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition-colors shadow-lg shadow-blue-600/30"
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition-all duration-200 active:scale-95 shadow-lg shadow-blue-600/30"
               >
                 Sim, Enviar
               </button>
@@ -337,7 +427,7 @@ export default function PautaSessao() {
                   </div>
                   <div className="w-full md:w-48 shrink-0">
                     <select
-                      className="w-full border border-blue-300 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 font-bold text-blue-900 bg-white shadow-sm"
+                      className="w-full border border-blue-300 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-600 font-bold text-blue-900 bg-white shadow-sm cursor-pointer"
                       value={item.turnoVotacao || ""}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -356,7 +446,7 @@ export default function PautaSessao() {
             </div>
             
             <div className="flex gap-3 justify-end pt-4 border-t border-gray-100">
-              <button onClick={() => setShowTurnoModal(false)} className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg font-bold hover:bg-gray-300 transition-colors">Cancelar Impressão</button>
+              <button onClick={() => setShowTurnoModal(false)} className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg font-bold hover:bg-gray-300 transition-all duration-200 active:scale-95">Cancelar Impressão</button>
               <button onClick={() => {
                 if (itensParaTurno.some(i => !i.turnoVotacao)) {
                   showAlert("Por favor, selecione o turno de TODOS os projetos listados.", "warning");
@@ -364,7 +454,7 @@ export default function PautaSessao() {
                 }
                 setShowTurnoModal(false);
                 executarImpressao();
-              }} className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 flex items-center gap-2 transition-colors shadow-md">
+              }} className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 flex items-center gap-2 transition-all duration-200 active:scale-95 shadow-md">
                 🖨️ Confirmar e Imprimir
               </button>
             </div>
@@ -379,8 +469,8 @@ export default function PautaSessao() {
             <h3 className="text-xl font-bold text-gray-900 mb-2">Remover Documento</h3>
             <p className="text-gray-600 text-sm mb-8">Tem a certeza que deseja remover este documento da pauta de hoje?</p>
             <div className="flex gap-3">
-              <button onClick={cancelRemove} className="flex-1 py-3 bg-gray-100 text-gray-800 rounded-xl font-bold hover:bg-gray-200 transition-colors">Cancelar</button>
-              <button onClick={executeRemove} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors">Sim, Remover</button>
+              <button onClick={cancelRemove} className="flex-1 py-3 bg-gray-100 text-gray-800 rounded-xl font-bold hover:bg-gray-200 transition-all duration-200 active:scale-95">Cancelar</button>
+              <button onClick={executeRemove} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-all duration-200 active:scale-95">Sim, Remover</button>
             </div>
           </div>
         </div>
@@ -429,11 +519,11 @@ export default function PautaSessao() {
             <button 
               onClick={enviarParaPlenario} 
               disabled={enviando}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {enviando ? "A Enviar..." : "🚀 Enviar Pauta para Sessão"}
             </button>
-            <button onClick={iniciarImpressao} className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-colors flex items-center justify-center gap-2">
+            <button onClick={iniciarImpressao} className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-200 active:scale-95 flex items-center justify-center gap-2">
               🖨️ Imprimir Pauta Oficial
             </button>
           </div>
@@ -450,8 +540,12 @@ export default function PautaSessao() {
               <label className="block text-xs font-bold text-gray-700 mb-1">Data Final (Aprovação)</label>
               <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none" />
             </div>
-            <div className="flex items-end"><button onClick={aplicarFiltroData} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition-colors">🔍 Buscar Período</button></div>
-            <div className="flex items-end"><button onClick={() => setItensPauta(todosDocumentos.map(formatToPautaItem))} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2.5 rounded-lg transition-colors">🔄 Mostrar Todos</button></div>
+            <div className="flex items-end">
+                <button onClick={aplicarFiltroData} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition-all duration-200 active:scale-95">🔍 Buscar Período</button>
+            </div>
+            <div className="flex items-end">
+                <button onClick={() => setItensPauta(todosDocumentos.map(formatToPautaItem))} className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2.5 rounded-lg transition-all duration-200 active:scale-95">🔄 Mostrar Todos</button>
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-gray-100 pt-4">
             <div className="md:col-span-2">
@@ -468,26 +562,50 @@ export default function PautaSessao() {
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
           <div className="flex justify-between items-center border-b border-gray-200 pb-3 mb-4">
             <h3 className="font-bold text-gray-800">2. Itens Presentes na Pauta ({itensPauta.length})</h3>
-            <button onClick={() => setShowAddManual(!showAddManual)} className="bg-purple-100 text-purple-700 hover:bg-purple-200 font-bold py-1.5 px-4 rounded-lg text-sm transition-colors">+ Adicionar Manual</button>
+            <button onClick={() => setShowAddManual(!showAddManual)} className="bg-purple-100 text-purple-700 hover:bg-purple-200 font-bold py-1.5 px-4 rounded-lg text-sm transition-all duration-200 active:scale-95">+ Adicionar Manual</button>
           </div>
 
           {showAddManual && (
             <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 mb-6 animate-in slide-in-from-top-4">
               <h4 className="font-bold text-purple-900 mb-3 text-sm">Adicionar Item Manual</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 mb-3">
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Tipo</label><input type="text" value={manualForm.type} onChange={(e) => setManualForm({...manualForm, type: e.target.value.toUpperCase()})} placeholder="Ex: PARECER" className="w-full border border-purple-300 rounded p-2 text-sm text-gray-900 outline-none" /></div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Tipo de Documento</label>
+                  <select 
+                    value={manualForm.type} 
+                    onChange={(e) => {
+                      const novoTipo = e.target.value;
+                      setManualForm({
+                        ...manualForm, 
+                        type: novoTipo,
+                        numero: calcularProximoNumero(novoTipo)
+                      });
+                    }} 
+                    className="w-full border border-purple-300 rounded p-2 text-sm text-gray-900 outline-none bg-white cursor-pointer"
+                  >
+                    <option value="INDICACAO">Indicação</option>
+                    <option value="REQUERIMENTO">Requerimento</option>
+                    <option value="PROJETO_LEI_LEGISLATIVO">Projeto de Lei (Vereador)</option>
+                    <option value="PROJETO_LEI_EXECUTIVO">Projeto de Lei (Prefeitura)</option>
+                    <option value="OFICIO">Ofício</option>
+                    <option value="MOCAO">Moção</option>
+                    <option value="PARECER">Parecer</option>
+                    <option value="EMENDA_ADITIVA">Emenda Aditiva</option>
+                    <option value="EMENDA_IMPOSITIVA">Emenda Impositiva</option>
+                  </select>
+                </div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Número/Ano</label><input type="text" value={manualForm.numero} onChange={(e) => setManualForm({...manualForm, numero: e.target.value})} placeholder="Ex: 001/2026" className="w-full border border-purple-300 rounded p-2 text-sm text-gray-900 outline-none" /></div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Autor</label><input type="text" value={manualForm.propositor} onChange={(e) => setManualForm({...manualForm, propositor: e.target.value.toUpperCase()})} placeholder="Nome do Autor" className="w-full border border-purple-300 rounded p-2 text-sm text-gray-900 outline-none" /></div>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Bloco da Pauta</label>
-                  <select value={manualForm.tramitacao} onChange={(e) => setManualForm({...manualForm, tramitacao: e.target.value as "LEITURA" | "VOTAÇÃO"})} className="w-full border border-purple-300 rounded p-2 text-sm text-gray-900 outline-none">
+                  <select value={manualForm.tramitacao} onChange={(e) => setManualForm({...manualForm, tramitacao: e.target.value as "LEITURA" | "VOTAÇÃO"})} className="w-full border border-purple-300 rounded p-2 text-sm text-gray-900 outline-none bg-white cursor-pointer">
                     <option value="LEITURA">LEITURA (Expediente)</option><option value="VOTAÇÃO">VOTAÇÃO (Ordem Dia)</option>
                   </select>
                 </div>
                 {manualForm.tramitacao === "VOTAÇÃO" && (
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1 text-green-700">Turno da Votação</label>
-                    <select value={manualForm.turnoVotacao || ""} onChange={(e) => setManualForm({...manualForm, turnoVotacao: e.target.value})} className="w-full border border-green-400 bg-green-50 rounded p-2 text-sm text-green-900 font-bold outline-none">
+                    <select value={manualForm.turnoVotacao || ""} onChange={(e) => setManualForm({...manualForm, turnoVotacao: e.target.value})} className="w-full border border-green-400 bg-green-50 rounded p-2 text-sm text-green-900 font-bold outline-none cursor-pointer">
                       <option value="">Selecione...</option>
                       <option value="Votação Única">Votação Única</option>
                       <option value="1ª Votação">1ª Votação</option>
@@ -497,7 +615,7 @@ export default function PautaSessao() {
                 )}
               </div>
               <div className="mb-3"><label className="block text-xs font-bold text-gray-700 mb-1">Ementa / Resumo</label><textarea rows={2} value={manualForm.ementa} onChange={(e) => setManualForm({...manualForm, ementa: e.target.value})} className="w-full border border-purple-300 rounded p-2 text-sm text-gray-900 outline-none" placeholder="Resumo do pedido..."></textarea></div>
-              <button onClick={adicionarManual} className="bg-purple-700 text-white font-bold py-2 px-6 rounded shadow-sm hover:bg-purple-800 transition-colors text-sm">Salvar Item Manual</button>
+              <button onClick={adicionarManual} className="bg-purple-700 text-white font-bold py-2 px-6 rounded shadow-sm hover:bg-purple-800 transition-all duration-200 active:scale-95 text-sm">Salvar Item Manual</button>
             </div>
           )}
 
@@ -512,14 +630,14 @@ export default function PautaSessao() {
                       <div className="md:col-span-1"><label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Autor</label><input type="text" value={editForm.propositor} onChange={(e) => setEditForm({...editForm, propositor: e.target.value.toUpperCase()})} className="w-full border border-gray-300 rounded p-2 text-sm text-gray-900 mb-2" /></div>
                       <div className="md:col-span-1">
                         <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Bloco</label>
-                        <select value={editForm.tramitacao} onChange={(e) => setEditForm({...editForm, tramitacao: e.target.value as "LEITURA"|"VOTAÇÃO"})} className="w-full border border-gray-300 rounded p-2 text-sm text-gray-900 mb-2">
+                        <select value={editForm.tramitacao} onChange={(e) => setEditForm({...editForm, tramitacao: e.target.value as "LEITURA"|"VOTAÇÃO"})} className="w-full border border-gray-300 rounded p-2 text-sm text-gray-900 mb-2 cursor-pointer">
                           <option value="LEITURA">LEITURA (Expediente)</option><option value="VOTAÇÃO">VOTAÇÃO (Ordem Dia)</option>
                         </select>
                       </div>
                       {editForm.tramitacao === "VOTAÇÃO" && (
                         <div className="md:col-span-1">
                           <label className="block text-[10px] uppercase font-bold text-green-600 mb-1">Turno</label>
-                          <select value={editForm.turnoVotacao || ""} onChange={(e) => setEditForm({...editForm, turnoVotacao: e.target.value})} className="w-full border border-green-400 bg-green-50 rounded p-2 text-sm text-green-900 font-bold mb-2 outline-none">
+                          <select value={editForm.turnoVotacao || ""} onChange={(e) => setEditForm({...editForm, turnoVotacao: e.target.value})} className="w-full border border-green-400 bg-green-50 rounded p-2 text-sm text-green-900 font-bold mb-2 outline-none cursor-pointer">
                             <option value="">Selecione...</option>
                             <option value="Votação Única">Votação Única</option>
                             <option value="1ª Votação">1ª Votação</option>
@@ -529,8 +647,8 @@ export default function PautaSessao() {
                       )}
                       <div className="md:col-span-full"><label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Ementa</label><textarea rows={2} value={editForm.ementa} onChange={(e) => setEditForm({...editForm, ementa: e.target.value})} className="w-full border border-gray-300 rounded p-2 text-sm text-gray-900 mb-2" /></div>
                       <div className="md:col-span-full flex gap-2">
-                        <button onClick={salvarEdicao} className="bg-green-600 text-white font-bold py-1.5 px-4 rounded text-sm hover:bg-green-700">💾 Guardar Alterações</button>
-                        <button onClick={() => setEditingId(null)} className="bg-gray-400 text-white font-bold py-1.5 px-4 rounded text-sm hover:bg-gray-500">Cancelar</button>
+                        <button onClick={salvarEdicao} className="bg-green-600 text-white font-bold py-1.5 px-4 rounded text-sm hover:bg-green-700 transition-all duration-200 active:scale-95">💾 Guardar Alterações</button>
+                        <button onClick={() => setEditingId(null)} className="bg-gray-400 text-white font-bold py-1.5 px-4 rounded text-sm hover:bg-gray-500 transition-all duration-200 active:scale-95">Cancelar</button>
                       </div>
                     </div>
                   ) : (
@@ -545,8 +663,8 @@ export default function PautaSessao() {
                         <p className="text-sm text-gray-600 line-clamp-2 italic">"{item.ementa}"</p>
                       </div>
                       <div className="flex flex-row sm:flex-col gap-2 justify-center shrink-0">
-                        <button onClick={() => { setEditingId(item.id); setEditForm(item); }} className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-200 font-bold py-1.5 px-3 rounded text-xs shadow-sm w-full">✏️ Alterar</button>
-                        <button onClick={() => confirmRemove(item.id)} className="bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 font-bold py-1.5 px-3 rounded text-xs shadow-sm w-full">🗑️ Remover</button>
+                        <button onClick={() => { setEditingId(item.id); setEditForm(item); }} className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-200 font-bold py-1.5 px-3 rounded text-xs shadow-sm w-full transition-all duration-200 active:scale-95">✏️ Alterar</button>
+                        <button onClick={() => confirmRemove(item.id)} className="bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 font-bold py-1.5 px-3 rounded text-xs shadow-sm w-full transition-all duration-200 active:scale-95">🗑️ Remover</button>
                       </div>
                     </div>
                   )}

@@ -22,17 +22,36 @@ export class VotacaoController {
       },
     });
     
-    // Mantém o seu padrão de status validado no Prisma
+    // --- LÓGICA DE REGRAS DE APROVAÇÃO E QUÓRUM ---
+    const tipo = (data.tipoDocumento || '').toUpperCase();
+    const totalVereadores = data.totalVereadores || 9; // Fallback caso não seja enviado
+    
+    let aprovado = false;
+
+    // REGRA 1: Maioria Qualificada (2/3) - Ex: Emendas à Lei Orgânica, Cassação, Veto
+    if (tipo.includes('EMENDA') || tipo.includes('VETO') || tipo.includes('CASSAÇÃO')) {
+      const minVotos = Math.ceil(totalVereadores * (2 / 3));
+      aprovado = data.sim >= minVotos;
+    } 
+    // REGRA 2: Maioria Absoluta - Ex: Lei Complementar (mais da metade de TODOS os membros)
+    else if (tipo.includes('COMPLEMENTAR')) {
+      const minVotos = Math.floor(totalVereadores / 2) + 1;
+      aprovado = data.sim >= minVotos;
+    } 
+    // REGRA 3: Maioria Simples - Ex: Projetos de Lei Ordinária, Requerimentos, Indicações
+    else {
+      // Maioria simples exige apenas que os "SIM" sejam maiores que os "NÃO" entre os presentes
+      aprovado = data.sim > data.nao;
+    }
+
     await prisma.document.update({
       where: { id: data.documentId },
       data: { 
-        status: data.sim > data.nao 
-          ? DocumentStatus.APROVADO 
-          : DocumentStatus.CANCELADO 
+        status: aprovado ? DocumentStatus.APROVADO : DocumentStatus.CANCELADO 
       }
     });
 
-    return registro;
+    return { ...registro, statusFinal: aprovado ? 'APROVADO' : 'REJEITADO' };
   }
 
  @Post('ata/gerar')

@@ -21,55 +21,105 @@ export class DocumentService {
   }) {
     const currentYear = new Date().getFullYear();
 
-    // 1. Pega todos os protocolos válidos
-    const allDocs = await prisma.document.findMany({
-      where: { 
-        tenantId: data.tenantId, 
-        year: currentYear,
-        type: data.type,
-        protocolNum: { gt: 0 } 
-      },
-      select: { protocolNum: true },
-      orderBy: { protocolNum: 'asc' },
-    });
+    // Utilizamos $transaction para evitar "race conditions" (números duplicados se 2 pessoas salvarem ao mesmo tempo)
+    return await prisma.$transaction(async (tx) => {
+      // 1. Pega apenas protocolos válidos (maiores que 0) daquele TIPO, ANO e TENANT
+      const allDocs = await tx.document.findMany({
+        where: { 
+          tenantId: data.tenantId, 
+          year: currentYear,
+          type: data.type, 
+          protocolNum: { gt: 0 } 
+        },
+        select: { protocolNum: true },
+        orderBy: { protocolNum: 'asc' },
+      });
 
-    // 2. Preenche buracos
-    let nextProtocolNum = 1;
-    for (const doc of allDocs) {
-      if (doc.protocolNum === nextProtocolNum) {
-        nextProtocolNum++;
-      } else if (doc.protocolNum > nextProtocolNum) {
-        break; 
+      // 2. Lógica Reforçada: Descobrir o próximo número disponível
+      // Como a query já filtrou protocolNum > 0 e ordenou, podemos varrer de forma limpa.
+      let nextProtocolNum = 1;
+      for (const doc of allDocs) {
+        if (doc.protocolNum === nextProtocolNum) {
+          nextProtocolNum++;
+        } else if (doc.protocolNum > nextProtocolNum) {
+          // Achou um buraco, o nextProtocolNum atual é a vaga livre.
+          break; 
+        }
       }
-    }
 
-    // 3. Regra de Negócio Corrigida: Só aplica a trava se NÃO for Rascunho
-    const author = await prisma.user.findUnique({ where: { id: data.authorId } });
-    let finalStatus = data.status;
-    
-    if (data.status !== 'RASCUNHO') {
-      finalStatus = author?.role === 'VEREADOR' ? 'ENVIADO' : 'AGUARDANDO_ASSINATURA';
-    }
+      // 3. Regra de Negócio: Só aplica a trava de envio se NÃO for Rascunho
+      const author = await tx.user.findUnique({ where: { id: data.authorId } });
+      let finalStatus = data.status;
+      
+      if (data.status !== 'RASCUNHO') {
+        finalStatus = author?.role === 'VEREADOR' ? 'ENVIADO' : 'AGUARDANDO_ASSINATURA';
+      }
 
-    return await prisma.document.create({
-      data: {
-        protocolNum: nextProtocolNum,
-        year: currentYear,
-        type: data.type,
-        status: finalStatus, 
-        ementa: data.ementa,
-        content: data.content || '', 
-        motivo: data.motivo,
-        secretariaDestino: data.secretariaDestino,
-        nomeSecretario: data.nomeSecretario,
-        justificativa: data.justificativa,
-        tenantId: data.tenantId,
-        gabineteId: data.gabineteId,
-        authorId: data.authorId,
-      },
+      // 4. Cria o documento com o número correto calculado
+      return await tx.document.create({
+        data: {
+          protocolNum: nextProtocolNum,
+          year: currentYear,
+          type: data.type,
+          status: finalStatus, 
+          ementa: data.ementa,
+          content: data.content || '', 
+          motivo: data.motivo,
+          secretariaDestino: data.secretariaDestino,
+          nomeSecretario: data.nomeSecretario,
+          justificativa: data.justificativa,
+          tenantId: data.tenantId,
+          gabineteId: data.gabineteId,
+          authorId: data.authorId,
+        },
+      });
     });
   }
+// NOVO: Função para inserir documentos manuais direto na Pauta
+  async createManual(data: {
+    type: DocumentType;
+    ementa: string;
+    propositorManual?: string;
+    tenantId: string;
+    gabineteId: string;
+    authorId: string;
+  }) {
+    const currentYear = new Date().getFullYear();
 
+    return await prisma.$transaction(async (tx) => {
+      // 1. Calcula o próximo número ignorando os negativos (cancelados)
+      const allDocs = await tx.document.findMany({
+        where: { tenantId: data.tenantId, year: currentYear, type: data.type, protocolNum: { gt: 0 } },
+        select: { protocolNum: true },
+        orderBy: { protocolNum: 'asc' },
+      });
+
+      let nextProtocolNum = 1;
+      for (const doc of allDocs) {
+        if (doc.protocolNum === nextProtocolNum) {
+          nextProtocolNum++;
+        } else if (doc.protocolNum > nextProtocolNum) {
+          break; 
+        }
+      }
+
+      // 2. Grava permanentemente na base de dados com status APROVADO
+      return await tx.document.create({
+        data: {
+          protocolNum: nextProtocolNum,
+          year: currentYear,
+          type: data.type,
+          status: 'APROVADO', 
+          ementa: data.ementa,
+          // Guardamos o nome do propositor manual no campo content para histórico
+          content: data.propositorManual ? `Autor (Lançamento Manual): ${data.propositorManual}` : '', 
+          tenantId: data.tenantId,
+          gabineteId: data.gabineteId,
+          authorId: data.authorId,
+        },
+      });
+    });
+  }
   async findByGabinete(gabineteId: string) {
     return await prisma.document.findMany({
       where: { gabineteId },
@@ -88,14 +138,15 @@ export class DocumentService {
       }
     });
   }
-async findAprovados(tenantId: string) {
+
+  async findAprovados(tenantId: string) {
     return await prisma.document.findMany({
       where: { 
         tenantId, 
         status: 'APROVADO' 
       },
       orderBy: [
-        { type: 'asc' }, // Agrupa por tipo (Indicações, Ofícios, etc)
+        { type: 'asc' }, // Agrupa por tipo (Indicações, Projetos do Executivo, etc)
         { protocolNum: 'asc' } // Ordena pelo número
       ],
       include: { 
@@ -104,6 +155,7 @@ async findAprovados(tenantId: string) {
       }
     });
   }
+
   async findOne(id: string) {
     return await prisma.document.findUnique({
       where: { id },
@@ -129,7 +181,7 @@ async findAprovados(tenantId: string) {
       feedbackSecretaria: feedbackSecretaria || null 
     };
 
-    // 3. Quando a Secretaria CANCELA, o documento perde o seu número oficial (fica com um negativo aleatório para não dar erro na base de dados)
+    // Quando a Secretaria CANCELA, o documento perde o seu número oficial 
     if (status === 'CANCELADO') {
        updateData.protocolNum = -Math.floor(Date.now() / 1000) - Math.floor(Math.random() * 1000);
     }
@@ -153,6 +205,7 @@ async findAprovados(tenantId: string) {
       },
     });
   }
+
   async findAprovadosSecretaria(tenantId: string) {
     return await prisma.document.findMany({
       where: {
@@ -162,7 +215,7 @@ async findAprovados(tenantId: string) {
       include: {
         gabinete: {
           select: {
-            name: true, // Conforme visto nos outros métodos do seu service, o campo correto na tabela é 'name' e não 'nome'
+            name: true, 
           },
         },
       },

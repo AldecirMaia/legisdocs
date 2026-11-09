@@ -11,6 +11,12 @@ export class DocumentController {
     return this.documentService.create(body);
   }
 
+  // NOVA ROTA: Cria e grava documentos manuais injetados pela pauta
+  @Post('create-manual')
+  createManual(@Body() body: any) {
+    return this.documentService.createManual(body);
+  }
+
   @Get('gabinete/:gabineteId')
   findByGabinete(@Param('gabineteId') gabineteId: string) {
     return this.documentService.findByGabinete(gabineteId);
@@ -21,7 +27,6 @@ export class DocumentController {
     return this.documentService.findFilaAnalise(tenantId);
   }
 
-  // ROTA ADICIONADA: Permite ao frontend buscar os documentos aprovados para a Pauta
   @Get('aprovados/:tenantId')
   findAprovados(@Param('tenantId') tenantId: string) {
     return this.documentService.findAprovados(tenantId);
@@ -37,7 +42,6 @@ export class DocumentController {
     @Param('id') id: string, 
     @Body() body: { status: DocumentStatus; feedback?: string; feedbackSecretaria?: string }
   ) {
-    // Garante que recebe o motivo da devolução, independentemente do nome da variável enviada pelo frontend
     const motivo = body.feedbackSecretaria || body.feedback;
     return this.documentService.updateStatus(id, body.status, motivo);
   }
@@ -46,6 +50,7 @@ export class DocumentController {
   updateDocument(@Param('id') id: string, @Body() body: any) {
     return this.documentService.updateDocument(id, body);
   }
+  
   @Get('aprovados-secretaria/:tenantId')
   async getAprovadosSecretaria(@Param('tenantId') tenantId: string) {
     return this.documentService.findAprovadosSecretaria(tenantId);

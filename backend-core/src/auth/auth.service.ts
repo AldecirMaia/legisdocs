@@ -1,6 +1,6 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -50,5 +50,42 @@ export class AuthService {
         gabineteId: user.gabineteId
       }
     };
+  }
+
+  // NOVO: Método responsável por registrar membros do gabinete
+  async register(data: { name: string; email: string; password: string; role: string; gabineteId: string }) {
+    // 1. Verifica se o e-mail já está cadastrado
+    const userExists = await prisma.user.findUnique({
+      where: { email: data.email },
+    });
+
+    if (userExists) {
+      throw new ConflictException('Este e-mail já está em uso por outro utilizador.');
+    }
+
+    // 2. Busca o gabinete para herdar o tenantId correto
+    const gabinete = await prisma.gabinete.findUnique({
+      where: { id: data.gabineteId },
+    });
+
+    if (!gabinete) {
+      throw new NotFoundException('Gabinete não encontrado.');
+    }
+
+    // 3. Cria o novo usuário vinculando ao Gabinete e ao Tenant
+    const newUser = await prisma.user.create({
+      data: {
+        name: data.name,
+        email: data.email,
+        password: data.password, // Mantido em texto plano conforme sua regra atual do login
+        role: data.role as Role,
+        tenantId: gabinete.tenantId,
+        gabineteId: data.gabineteId,
+      },
+    });
+
+    // Remove a senha do objeto de retorno por segurança
+    const { password, ...result } = newUser;
+    return result;
   }
 }
