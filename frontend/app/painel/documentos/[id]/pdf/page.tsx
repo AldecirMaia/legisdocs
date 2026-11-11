@@ -48,6 +48,44 @@ export default function DocumentoPDF({ params }: { params: Promise<{ id: string 
   const nomeAssinatura = vereadorTitular?.name || doc.author?.name;
   const partidoAssinatura = vereadorTitular?.partido || doc.author?.partido;
 
+  // Verifica se é um Projeto de Lei ou Emenda para aplicar a regra de 2 assinaturas e quebra de página
+  const isProjetoOuEmenda = doc.type?.includes("PROJETO") || doc.type?.includes("EMENDA");
+
+  // Componente reutilizável de Assinatura para posicionar corretamente de acordo com o tipo de documento e a quebra de página
+  const renderAssinatura = () => (
+    <div className="mt-8 mb-4 break-inside-avoid">
+      {doc.type !== "OFICIO" && (
+        <>
+          <p className="text-[13px] text-gray-800 mb-1">Palácio: {tenant?.palacioNome}</p>
+          <p className="text-[13px] text-gray-800 mb-4">Sala das Sessões: {tenant?.salaSessoesNome}</p>
+          <p className="text-right font-medium mb-8">
+            {tenant?.cidadeEstado}, {dataFormatada}.
+          </p>
+        </>
+      )}
+
+      {(doc.status === "ENVIADO" || doc.status === "APROVADO") ? (
+        <div className="mt-4 flex flex-col items-center justify-center border-[1.5px] border-blue-900 rounded py-2 px-4 w-64 mx-auto bg-blue-50 text-blue-900 print:border-black print:text-black print:bg-white">
+          <p className="text-[9px] uppercase font-bold tracking-widest">Assinatura Eletrônica</p>
+          <p className="font-bold text-[12px] uppercase mt-1">{nomeAssinatura}</p>
+          <p className="text-[9px] font-semibold">
+            {doc.type === "PARECER" ? "VEREADOR(A) RELATOR(A)" : `VEREADOR(A) ${partidoAssinatura ? `- ${partidoAssinatura}` : ""}`}
+          </p>
+          <p className="text-[7px] mt-1 font-medium italic">Autenticado digitalmente via sistema.</p>
+        </div>
+      ) : (
+        <div className="text-center flex flex-col items-center mt-8">
+          <div className="w-64 border-t border-black pt-2 mb-1">
+            <p className="font-bold uppercase tracking-wider text-[13px]">{nomeAssinatura}</p>
+          </div>
+          <p className="text-[12px] uppercase font-semibold">
+            {doc.type === "PARECER" ? "VEREADOR(A) RELATOR(A)" : `VEREADOR(A) ${partidoAssinatura ? `- ${partidoAssinatura}` : ""}`}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-200 py-8 flex flex-col items-center print:py-0 print:p-0 print:m-0 print:bg-white print:block">
       
@@ -117,6 +155,47 @@ export default function DocumentoPDF({ params }: { params: Promise<{ id: string 
           </div>
 
           {(() => {
+            
+            // Lógica isolada para PROJETOS DE LEI E EMENDAS
+            if (isProjetoOuEmenda) {
+              const numAnoFormato = `${String(doc.protocolNum > 0 ? doc.protocolNum : '0').padStart(3, '0')}/${doc.year}`;
+              const tipoFormatado = doc.type.replace(/_/g, ' '); // Transforma "PROJETO_LEI_LEGISLATIVO" em "PROJETO LEI LEGISLATIVO"
+              const tituloPL = `${tipoFormatado} Nº ${numAnoFormato}`;
+
+              return (
+                <div className="text-[12px]">
+                  <h1 className="text-center font-bold text-[17px] mb-4 uppercase tracking-wide">
+                    {tituloPL}
+                  </h1>
+                  <div className="ml-auto w-[65%] text-justify text-[13px] font-bold mb-8 italic">
+                    <p>{doc.ementa}</p>
+                  </div>
+
+                  <p className="text-justify indent-10 mb-6 leading-relaxed">
+                    O(A) Vereador(a) que esta subscreve, <strong>{nomeAssinatura}</strong>, no uso de suas atribuições legais e regimentais, apresenta a seguinte proposição legislativa, com a seguinte redação:
+                  </p>
+
+                  {/* ARTIGOS DA LEI */}
+                  <div className="text-justify leading-relaxed mb-6 html-content" dangerouslySetInnerHTML={{ __html: doc.texto || doc.artigos || "" }}></div>
+
+                  {/* 1ª ASSINATURA ELETRÔNICA (Posicionada no final dos artigos) */}
+                  {renderAssinatura()}
+
+                  {/* QUEBRA DE PÁGINA PARA A JUSTIFICATIVA */}
+                  <div style={{ pageBreakBefore: 'always' }} className="pt-10 break-before-page">
+                    <h2 className="text-center font-bold text-[15px] mb-6 uppercase tracking-wider">
+                      JUSTIFICATIVA DO {tituloPL}
+                    </h2>
+                    <div className="text-justify leading-relaxed mb-6 html-content" dangerouslySetInnerHTML={{ __html: doc.justificativa || doc.motivo || "" }}></div>
+                    
+                    {/* 2ª ASSINATURA ELETRÔNICA (Posicionada no final da justificativa) */}
+                    {renderAssinatura()}
+                  </div>
+                </div>
+              );
+            }
+
+            // Lógica para os OUTROS tipos de documentos
             switch (doc.type) {
               case "OFICIO":
                 return (
@@ -151,21 +230,6 @@ export default function DocumentoPDF({ params }: { params: Promise<{ id: string 
                   </div>
                 );
 
-              case "PROJETO_LEI":
-              case "EMENDA_ADITIVA":
-              case "EMENDA_IMPOSITIVA":
-                return (
-                  <div className="text-[12px]">
-                    <h1 className="text-center font-bold text-[17px] mb-4 uppercase tracking-wide">
-                      {doc.type === "PROJETO_LEI" ? `PROJETO DE LEI Nº ${String(doc.protocolNum).padStart(3, '0')}/${doc.year}` : 
-                       doc.type === "EMENDA_ADITIVA" ? `EMENDA PARLAMENTAR ADITIVA Nº ${String(doc.protocolNum).padStart(3, '0')}/${doc.year}` : 
-                       `EMENDA IMPOSITIVA Nº ${String(doc.protocolNum).padStart(3, '0')}/${doc.year}`}
-                    </h1>
-                    <div className="ml-auto w-1/2 text-justify text-[13px] font-bold mb-6 italic"><p>{doc.ementa}</p></div>
-                    <div className="text-justify leading-relaxed mb-8 html-content" dangerouslySetInnerHTML={{ __html: doc.justificativa || "" }}></div>
-                  </div>
-                );
-
               default: 
                 return (
                   <div className="text-[12px]">
@@ -187,43 +251,8 @@ export default function DocumentoPDF({ params }: { params: Promise<{ id: string 
             }
           })()}
 
-          <div className="mt-6 break-inside-avoid">
-            {doc.type !== "OFICIO" && (
-              <>
-                <p className="text-[13px] text-gray-800 mb-1">Palácio: {tenant?.palacioNome}</p>
-                <p className="text-[13px] text-gray-800 mb-4">Sala das Sessões: {tenant?.salaSessoesNome}</p>
-              </>
-            )}
-
-            {doc.type !== "OFICIO" && (
-              <p className="text-right font-medium mb-8">
-                {tenant?.cidadeEstado}, {dataFormatada}.
-              </p>
-            )}
-
-            {/* Lógica Híbrida de Assinatura Eletrónica */}
-            {(doc.status === "ENVIADO" || doc.status === "APROVADO") ? (
-              <div className="mt-4 flex flex-col items-center justify-center border-[1.5px] border-blue-900 rounded py-2 px-4 w-64 mx-auto bg-blue-50 text-blue-900 break-inside-avoid print:border-black print:text-black print:bg-white">
-                <p className="text-[9px] uppercase font-bold tracking-widest">Assinatura Eletrónica</p>
-                <p className="font-bold text-[12px] uppercase mt-1">{nomeAssinatura}</p>
-                <p className="text-[9px] font-semibold">
-                  {doc.type === "PARECER" ? "VEREADOR(A) RELATOR(A)" : `VEREADOR(A) ${partidoAssinatura ? `- ${partidoAssinatura}` : ""}`}
-                </p>
-                <p className="text-[7px] mt-1 font-medium italic">
-                  Autenticado digitalmente via sistema.
-                </p>
-              </div>
-            ) : (
-              <div className="text-center flex flex-col items-center mt-8 break-inside-avoid">
-                <div className="w-64 border-t border-black pt-2 mb-1">
-                  <p className="font-bold uppercase tracking-wider text-[13px]">{nomeAssinatura}</p>
-                </div>
-                <p className="text-[12px] uppercase font-semibold">
-                  {doc.type === "PARECER" ? "VEREADOR(A) RELATOR(A)" : `VEREADOR(A) ${partidoAssinatura ? `- ${partidoAssinatura}` : ""}`}
-                </p>
-              </div>
-            )}
-          </div>
+          {/* Ocultar a assinatura de fecho global se o documento for do tipo PROJETO_LEI, pois ela já foi renderizada acima nas posições exatas */}
+          {!isProjetoOuEmenda && renderAssinatura()}
 
           <div className="w-full border-t-[1.5px] border-black pt-2 mt-6 text-center break-inside-avoid">
             <p className="font-bold text-[13px] uppercase">Palácio {tenant?.palacioNome}</p>

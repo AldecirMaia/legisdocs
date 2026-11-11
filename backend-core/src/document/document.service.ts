@@ -11,6 +11,7 @@ export class DocumentService {
     status: DocumentStatus;
     ementa: string;
     content?: string;
+    texto?: string; // NOVO CAMPO: Artigos da Lei adicionado à tipagem
     motivo?: string;
     secretariaDestino?: string;
     nomeSecretario?: string;
@@ -21,9 +22,7 @@ export class DocumentService {
   }) {
     const currentYear = new Date().getFullYear();
 
-    // Utilizamos $transaction para evitar "race conditions" (números duplicados se 2 pessoas salvarem ao mesmo tempo)
     return await prisma.$transaction(async (tx) => {
-      // 1. Pega apenas protocolos válidos (maiores que 0) daquele TIPO, ANO e TENANT
       const allDocs = await tx.document.findMany({
         where: { 
           tenantId: data.tenantId, 
@@ -35,19 +34,15 @@ export class DocumentService {
         orderBy: { protocolNum: 'asc' },
       });
 
-      // 2. Lógica Reforçada: Descobrir o próximo número disponível
-      // Como a query já filtrou protocolNum > 0 e ordenou, podemos varrer de forma limpa.
       let nextProtocolNum = 1;
       for (const doc of allDocs) {
         if (doc.protocolNum === nextProtocolNum) {
           nextProtocolNum++;
         } else if (doc.protocolNum > nextProtocolNum) {
-          // Achou um buraco, o nextProtocolNum atual é a vaga livre.
           break; 
         }
       }
 
-      // 3. Regra de Negócio: Só aplica a trava de envio se NÃO for Rascunho
       const author = await tx.user.findUnique({ where: { id: data.authorId } });
       let finalStatus = data.status;
       
@@ -55,7 +50,6 @@ export class DocumentService {
         finalStatus = author?.role === 'VEREADOR' ? 'ENVIADO' : 'AGUARDANDO_ASSINATURA';
       }
 
-      // 4. Cria o documento com o número correto calculado
       return await tx.document.create({
         data: {
           protocolNum: nextProtocolNum,
@@ -64,6 +58,7 @@ export class DocumentService {
           status: finalStatus, 
           ementa: data.ementa,
           content: data.content || '', 
+          texto: data.texto || null, // NOVO CAMPO: Guardado na base de dados
           motivo: data.motivo,
           secretariaDestino: data.secretariaDestino,
           nomeSecretario: data.nomeSecretario,
@@ -75,7 +70,7 @@ export class DocumentService {
       });
     });
   }
-// NOVO: Função para inserir documentos manuais direto na Pauta
+
   async createManual(data: {
     type: DocumentType;
     ementa: string;
@@ -87,7 +82,6 @@ export class DocumentService {
     const currentYear = new Date().getFullYear();
 
     return await prisma.$transaction(async (tx) => {
-      // 1. Calcula o próximo número ignorando os negativos (cancelados)
       const allDocs = await tx.document.findMany({
         where: { tenantId: data.tenantId, year: currentYear, type: data.type, protocolNum: { gt: 0 } },
         select: { protocolNum: true },
@@ -103,7 +97,6 @@ export class DocumentService {
         }
       }
 
-      // 2. Grava permanentemente na base de dados com status APROVADO
       return await tx.document.create({
         data: {
           protocolNum: nextProtocolNum,
@@ -111,7 +104,6 @@ export class DocumentService {
           type: data.type,
           status: 'APROVADO', 
           ementa: data.ementa,
-          // Guardamos o nome do propositor manual no campo content para histórico
           content: data.propositorManual ? `Autor (Lançamento Manual): ${data.propositorManual}` : '', 
           tenantId: data.tenantId,
           gabineteId: data.gabineteId,
@@ -120,6 +112,7 @@ export class DocumentService {
       });
     });
   }
+
   async findByGabinete(gabineteId: string) {
     return await prisma.document.findMany({
       where: { gabineteId },
@@ -146,8 +139,8 @@ export class DocumentService {
         status: 'APROVADO' 
       },
       orderBy: [
-        { type: 'asc' }, // Agrupa por tipo (Indicações, Projetos do Executivo, etc)
-        { protocolNum: 'asc' } // Ordena pelo número
+        { type: 'asc' },
+        { protocolNum: 'asc' }
       ],
       include: { 
         author: { select: { name: true, partido: true } },
@@ -164,7 +157,6 @@ export class DocumentService {
         gabinete: { 
           select: { 
             name: true,
-            // Esta inclusão é obrigatória para a assinatura do PDF funcionar
             users: {
               where: { role: 'VEREADOR' },
               select: { name: true, partido: true }
@@ -181,7 +173,6 @@ export class DocumentService {
       feedbackSecretaria: feedbackSecretaria || null 
     };
 
-    // Quando a Secretaria CANCELA, o documento perde o seu número oficial 
     if (status === 'CANCELADO') {
        updateData.protocolNum = -Math.floor(Date.now() / 1000) - Math.floor(Math.random() * 1000);
     }
@@ -198,6 +189,7 @@ export class DocumentService {
       data: {
         ementa: data.ementa,
         motivo: data.motivo,
+        texto: data.texto, // NOVO CAMPO: Atualizado na edição do documento
         justificativa: data.justificativa,
         secretariaDestino: data.secretariaDestino,
         nomeSecretario: data.nomeSecretario,

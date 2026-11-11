@@ -2,9 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { LayoutGrid, Clock, UserCircle, Filter, Inbox, UserCog, Gavel, CheckCircle2, ArrowLeft, FileSignature, Edit3, CheckSquare, Plus, Eye, Download, FileDown } from "lucide-react";
 import Link from "next/link";
+import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+import { 
+  LayoutGrid, Clock, UserCircle, Filter, Inbox, UserCog, Gavel, 
+  CheckCircle2, FileSignature, Edit3, Plus, Eye, Download, FileDown, 
+  Search, Bell, ChevronDown, Menu, LogOut 
+} from "lucide-react";
+import Sidebar from "@/app/components/Sidebar";
 
 const colunasBase = {
   AGUARDANDO_DESPACHO: { id: "AGUARDANDO_DESPACHO", titulo: "Aguardando Despacho", corBorda: "border-t-slate-500", icone: Inbox, items: [] },
@@ -20,6 +25,7 @@ export default function KanbanComissoes() {
   const [comissaoSelecionada, setComissaoSelecionada] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [userContext, setUserContext] = useState<any>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Modais de Parecer
   const [showModalParecer, setShowModalParecer] = useState(false);
@@ -63,11 +69,11 @@ export default function KanbanComissoes() {
       
       // VERIFICAÇÃO DE SEGURANÇA: Módulo Comissões Ativo?
       const token = localStorage.getItem("legisdocs_token");
-const resTenant = await fetch(`${apiEnv}/tenant/${user.tenantId}`, {
-  headers: { 
-    'Authorization': `Bearer ${token}` 
-  }
-});
+      const resTenant = await fetch(`${apiEnv}/tenant/${user.tenantId}`, {
+        headers: { 
+          'Authorization': `Bearer ${token}` 
+        }
+      });
       if (resTenant.ok) {
         const tenantData = await resTenant.json();
         if (!tenantData.moduloComissoes) {
@@ -358,212 +364,276 @@ const resTenant = await fetch(`${apiEnv}/tenant/${user.tenantId}`, {
     }
   };
 
-  if (loading) return <div className="p-10 text-center animate-pulse text-slate-500 font-medium">A carregar painel de comissões...</div>;
+  const handleLogout = () => {
+    localStorage.removeItem("legisdocs_token");
+    localStorage.removeItem("legisdocs_user");
+    router.push("/");
+  };
+
+  if (loading || !userContext) return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-slate-500 font-medium">A carregar painel de comissões...</div>;
 
   return (
-    <div className="p-8 h-[calc(100vh-80px)] flex flex-col bg-slate-50">
+    <div lang="pt-BR" className="flex h-screen bg-gray-50 overflow-hidden font-sans">
       
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-        <div>
-          <Link href="/painel" className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-600 mb-4 transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Voltar ao Painel
-          </Link>
-          <h1 className="text-3xl font-black text-slate-800 flex items-center gap-3">
-            <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-600/20">
-              <LayoutGrid className="w-6 h-6" />
-            </div>
-            Central das Comissões
-          </h1>
-          <p className="text-slate-500 font-medium mt-2 text-sm flex items-center gap-2">
-            Gerencie o fluxo de relatores e prazos legais dos projetos.
-            {roleLogado && roleLogado !== 'ADMIN' && (
-              <span className="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded text-xs font-bold border border-indigo-200">
-                O seu perfil nesta comissão: {roleLogado.replace('_', ' ')}
-              </span>
-            )}
-            {roleLogado === 'ADMIN' && (
-              <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-xs font-bold border border-slate-300">
-                Acesso Administrativo (Secretaria)
-              </span>
-            )}
-          </p>
-        </div>
+      {/* 1. COMPONENTE SIDEBAR */}
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-        <div className="flex items-center gap-3">
-          {roleLogado === 'ADMIN' && (
-            <button 
-              onClick={abrirModalDespacho}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2.5 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm"
-            >
-              <Plus className="w-4 h-4" /> Despachar Projeto p/ Comissão
+      {/* 2. ÁREA PRINCIPAL */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        
+        {/* CABEÇALHO SUPERIOR */}
+        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 z-10 flex-shrink-0">
+          <div className="flex items-center gap-4">
+            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden text-gray-500 hover:text-gray-800">
+              <Menu className="w-6 h-6" />
             </button>
-          )}
-
-          <div className="bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3">
-            <Filter className="w-5 h-5 text-slate-400" />
-            <span className="text-sm font-bold text-slate-700">Comissão:</span>
-            <select 
-              value={comissaoSelecionada}
-              onChange={(e) => setComissaoSelecionada(e.target.value)}
-              className="bg-slate-50 border border-slate-200 text-blue-700 font-bold text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer min-w-[200px]"
-            >
-              {comissoes.length === 0 && <option value="">Sem Comissões</option>}
-              {(Array.isArray(comissoes) ? comissoes : []).map(c => (
-                <option key={c.id} value={c.id}>{c.sigla} - {c.nome}</option>
-              ))}
-            </select>
+            <div className="hidden sm:flex max-w-xl items-center w-full">
+              <div className="relative w-full">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input 
+                  type="text" 
+                  placeholder="Buscar projetos nas comissões..." 
+                  className="w-full pl-10 pr-4 py-2 bg-gray-100 border-transparent rounded-lg text-sm focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                />
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      <DragDropContext onDragEnd={onDragEnd}>
-        <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
-          <div className="flex gap-6 h-full min-w-max px-1">
-            
-            {Object.values(colunas).map((coluna: any) => {
-              const Icone = coluna.icone;
-              const itensColuna = coluna.items.filter((i: any) => i.comissaoId === comissaoSelecionada);
+          <div className="flex items-center gap-5 ml-4">
+            <button className="relative text-gray-500 hover:text-blue-600 transition-colors">
+              <Bell className="w-5 h-5" />
+            </button>
+            <div className="h-8 w-px bg-gray-200 hidden sm:block"></div>
+            <div className="group relative cursor-pointer flex items-center gap-3">
+              <div className="hidden sm:flex flex-col items-end">
+                <span className="text-sm font-bold text-gray-700 leading-tight">{userContext.name}</span>
+                <span className="text-xs text-gray-500 font-medium capitalize">{userContext.role?.toLowerCase()}</span>
+              </div>
+              <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                {userContext.name?.charAt(0)}
+              </div>
+              <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-gray-600 hidden sm:block" />
+              
+              <div className="absolute top-full mt-2 right-0 w-48 bg-white rounded-lg shadow-lg border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+                <button onClick={handleLogout} className="w-full text-left px-4 py-3 text-sm text-red-600 font-bold hover:bg-red-50 flex items-center gap-2 rounded-lg">
+                  <LogOut className="w-4 h-4" /> Sair do Sistema
+                </button>
+              </div>
+            </div>
+          </div>
+        </header>
 
-              return (
-                <div key={coluna.id} className="w-[340px] flex flex-col h-[75vh] max-h-[800px] bg-slate-100/60 rounded-2xl border border-slate-200 shadow-sm flex-shrink-0">
-                  
-                  <div className={`px-5 py-4 bg-white rounded-t-2xl border-b border-slate-200 border-t-4 ${coluna.corBorda} flex justify-between items-center shadow-sm z-10`}>
-                    <div className="flex items-center gap-2 text-slate-800">
-                      <Icone className="w-5 h-5 opacity-70" />
-                      <h3 className="font-bold text-sm uppercase tracking-wider">{coluna.titulo}</h3>
-                    </div>
-                    
-                    <span className="bg-slate-100 text-slate-600 text-xs font-black px-2.5 py-1 rounded-full border border-slate-200">
-                      {itensColuna.length}
-                    </span>
-                  </div>
+        {/* CONTEÚDO PRINCIPAL */}
+        <main className="flex-1 flex flex-col overflow-hidden bg-slate-50 p-4 sm:p-6">
+          
+          {/* Breadcrumbs e Top Actions */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 shrink-0">
+            <div>
+              <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
+                <Link href="/painel" className="hover:text-blue-600 transition-colors">Início</Link>
+                <span>/</span>
+                <span className="font-semibold text-gray-700">Central das Comissões</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 flex items-center gap-3">
+                <div className="p-2 bg-blue-600 text-white rounded-xl shadow-md shadow-blue-600/20">
+                  <LayoutGrid className="w-5 h-5 sm:w-6 sm:h-6" />
+                </div>
+                Central das Comissões
+              </h1>
+              <p className="text-slate-500 font-medium mt-1 text-xs sm:text-sm flex flex-wrap items-center gap-2">
+                Gerencie o fluxo de relatores e prazos legais dos projetos.
+                {roleLogado && roleLogado !== 'ADMIN' && (
+                  <span className="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded text-xs font-bold border border-indigo-200">
+                    Seu perfil nesta comissão: {roleLogado.replace('_', ' ')}
+                  </span>
+                )}
+                {roleLogado === 'ADMIN' && (
+                  <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-xs font-bold border border-slate-300">
+                    Acesso Administrativo (Secretaria)
+                  </span>
+                )}
+              </p>
+            </div>
 
-                  <Droppable droppableId={coluna.id} isDropDisabled={roleLogado !== 'ADMIN' && roleLogado !== 'PRESIDENTE'}>
-                    {(provided, snapshot) => (
-                      <div 
-                        {...provided.droppableProps}
-                        ref={provided.innerRef}
-                        className={`flex-1 p-4 overflow-y-auto transition-colors duration-200 ${
-                          snapshot.isDraggingOver ? "bg-slate-200/80 ring-2 ring-inset ring-blue-300 rounded-b-2xl" : ""
-                        }`}
-                      >
-                        {itensColuna.length === 0 && !snapshot.isDraggingOver && (
-                          <div className="h-32 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-300 rounded-xl mt-2 bg-slate-50/50">
-                            <span className="text-sm font-semibold">Nenhum projeto</span>
-                          </div>
-                        )}
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+              {roleLogado === 'ADMIN' && (
+                <button 
+                  onClick={abrirModalDespacho}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2.5 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 text-xs sm:text-sm w-full sm:w-auto"
+                >
+                  <Plus className="w-4 h-4" /> Despachar Projeto p/ Comissão
+                </button>
+              )}
 
-                        {itensColuna.map((item: any, index: number) => {
-                          const isOProprioRelator = item.relatorId === userContext?.id;
-                          
-                          return (
-                          <Draggable key={item.id} draggableId={item.id} index={index} isDragDisabled={roleLogado !== 'ADMIN' && roleLogado !== 'PRESIDENTE'}>
-                            {(provided, snapshot) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                                className={`bg-white p-5 rounded-xl border border-slate-200 mb-3 transition-all ${
-                                  snapshot.isDragging ? "shadow-2xl shadow-blue-900/10 rotate-2 scale-105 ring-2 ring-blue-500 cursor-grabbing" : "shadow-sm hover:border-blue-400"
-                                }`}
-                              >
-                                <div className="flex justify-between items-start mb-3">
-                                  <div className="flex flex-col gap-1">
-                                    <span className="text-[10px] font-black tracking-widest text-slate-600 bg-slate-100 px-2 py-1 rounded border border-slate-200 w-max">
-                                      {item.document?.type?.replace(/_/g, ' ')}
-                                    </span>
-                                    <span className="text-xs font-bold text-slate-400">
-                                      Nº {item.document?.protocolNum}/{item.document?.year}
-                                    </span>
-                                  </div>
-                                  <button 
-                                    onClick={() => baixarProjetoOriginal(item.document)}
-                                    title="Baixar Projeto Original em PDF"
-                                    className="p-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 rounded-lg border border-indigo-100 transition-colors"
-                                  >
-                                    <FileDown className="w-4 h-4" />
-                                  </button>
-                                </div>
-                                
-                                <p className="text-sm text-slate-800 font-semibold line-clamp-3 mb-4 leading-relaxed">
-                                  {item.document?.ementa}
-                                </p>
+              <div className="bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-sm flex items-center gap-2.5 w-full sm:w-auto">
+                <Filter className="w-4 h-4 text-slate-400" />
+                <span className="text-xs font-bold text-slate-700">Comissão:</span>
+                <select 
+                  value={comissaoSelecionada}
+                  onChange={(e) => setComissaoSelecionada(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 text-blue-700 font-bold text-xs sm:text-sm rounded-lg px-2.5 py-1 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer min-w-[180px] flex-1 sm:flex-initial"
+                >
+                  {comissoes.length === 0 && <option value="">Sem Comissões</option>}
+                  {(Array.isArray(comissoes) ? comissoes : []).map(c => (
+                    <option key={c.id} value={c.id}>{c.sigla} - {c.nome}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
 
-                                <div className="pt-3 border-t border-slate-100 flex flex-col gap-3">
-                                  <div className="flex justify-between items-center text-xs">
-                                    <div className="flex items-center gap-1.5 text-slate-500 font-medium">
-                                      <UserCircle className="w-4 h-4" />
-                                      <span className={isOProprioRelator ? "text-indigo-600 font-bold" : ""}>
-                                        {item.relator?.name || "Sem relator designado"}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  
-                                  {/* AGUARDANDO DESPACHO */}
-                                  {!item.relator && coluna.id === "AGUARDANDO_DESPACHO" && (roleLogado === 'PRESIDENTE' || roleLogado === 'ADMIN') && (
-                                    <button onClick={() => abrirModalDesignar(item)} className="w-full bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 font-bold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 border border-slate-200">
-                                      <UserCog className="w-3.5 h-3.5" /> Designar Relator
-                                    </button>
-                                  )}
+          {/* Kanban Board */}
+          <DragDropContext onDragEnd={onDragEnd}>
+            <div className="flex-1 overflow-x-auto overflow-y-hidden pb-2">
+              <div className="flex gap-5 h-full min-w-max px-1">
+                
+                {Object.values(colunas).map((coluna: any) => {
+                  const Icone = coluna.icone;
+                  const itensColuna = coluna.items.filter((i: any) => i.comissaoId === comissaoSelecionada);
 
-                                  {/* EM ANÁLISE */}
-                                  {coluna.id === "EM_ANALISE" && (
-                                    <div className="flex flex-col gap-2 w-full">
-                                      <div className="flex items-center gap-1.5 text-orange-700 text-xs font-bold bg-orange-50 border border-orange-100 w-full justify-center py-2 rounded-md">
-                                        <Clock className="w-3.5 h-3.5" /> Prazo: {item.prazoDias || 15} dias
-                                      </div>
-                                      
-                                      {isOProprioRelator && (
-                                        <button onClick={() => abrirModalDeParecer(item)} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 shadow-sm">
-                                          <Edit3 className="w-3.5 h-3.5" /> Redigir / Editar Parecer
-                                        </button>
-                                      )}
-                                    </div>
-                                  )}
+                  return (
+                    <div key={coluna.id} className="w-[320px] sm:w-[340px] flex flex-col h-full bg-slate-100/70 rounded-2xl border border-slate-200/80 shadow-sm flex-shrink-0">
+                      
+                      <div className={`px-4 py-3.5 bg-white rounded-t-2xl border-b border-slate-200 border-t-4 ${coluna.corBorda} flex justify-between items-center shadow-sm z-10 shrink-0`}>
+                        <div className="flex items-center gap-2 text-slate-800">
+                          <Icone className="w-4 h-4 opacity-70" />
+                          <h3 className="font-bold text-xs uppercase tracking-wider">{coluna.titulo}</h3>
+                        </div>
+                        
+                        <span className="bg-slate-100 text-slate-600 text-xs font-black px-2.5 py-0.5 rounded-full border border-slate-200">
+                          {itensColuna.length}
+                        </span>
+                      </div>
 
-                                  {/* AGUARDANDO VOTAÇÃO */}
-                                  {coluna.id === "AGUARDANDO_VOTACAO" && (
-                                    <div className="flex flex-col gap-2 w-full">
-                                      <button onClick={() => abrirModalLeitura(item)} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 border border-slate-200">
-                                        <Eye className="w-3.5 h-3.5 text-blue-600" /> Ler Parecer Emitido
-                                      </button>
-
-                                      {(roleLogado === 'PRESIDENTE' || roleLogado === 'RELATOR' || roleLogado === 'MEMBRO' || roleLogado === 'ADMIN') && (
-                                        <button onClick={() => abrirModalAssinar(item)} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 shadow-sm">
-                                          <FileSignature className="w-3.5 h-3.5" /> Assinar / Votar
-                                        </button>
-                                      )}
-                                    </div>
-                                  )}
-
-                                  {/* CONCLUÍDO */}
-                                  {coluna.id === "CONCLUIDO" && (
-                                    <div className="flex flex-col gap-2 w-full">
-                                      <button onClick={() => abrirModalLeitura(item)} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 border border-slate-200">
-                                        <Eye className="w-3.5 h-3.5 text-blue-600" /> Ler Parecer Concluído
-                                      </button>
-                                      <button onClick={() => baixarParecerPdf(item)} className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 shadow-sm">
-                                        <Download className="w-3.5 h-3.5" /> Baixar Parecer com Votos
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
+                      <Droppable droppableId={coluna.id} isDropDisabled={roleLogado !== 'ADMIN' && roleLogado !== 'PRESIDENTE'}>
+                        {(provided, snapshot) => (
+                          <div 
+                            {...provided.droppableProps}
+                            ref={provided.innerRef}
+                            className={`flex-1 p-3.5 overflow-y-auto transition-colors duration-200 ${
+                              snapshot.isDraggingOver ? "bg-slate-200/80 ring-2 ring-inset ring-blue-300 rounded-b-2xl" : ""
+                            }`}
+                          >
+                            {itensColuna.length === 0 && !snapshot.isDraggingOver && (
+                              <div className="h-32 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl mt-2 bg-slate-50/50">
+                                <span className="text-xs font-semibold">Nenhum projeto</span>
                               </div>
                             )}
-                          </Draggable>
-                        )})}
-                        {provided.placeholder}
-                      </div>
-                    )}
-                  </Droppable>
 
-                </div>
-              );
-            })}
+                            {itensColuna.map((item: any, index: number) => {
+                              const isOProprioRelator = item.relatorId === userContext?.id;
+                              
+                              return (
+                              <Draggable key={item.id} draggableId={item.id} index={index} isDragDisabled={roleLogado !== 'ADMIN' && roleLogado !== 'PRESIDENTE'}>
+                                {(provided, snapshot) => (
+                                  <div
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    {...provided.dragHandleProps}
+                                    className={`bg-white p-4 rounded-xl border border-slate-200 mb-3 transition-all ${
+                                      snapshot.isDragging ? "shadow-2xl shadow-blue-900/10 rotate-2 scale-105 ring-2 ring-blue-500 cursor-grabbing" : "shadow-sm hover:border-blue-300"
+                                    }`}
+                                  >
+                                    <div className="flex justify-between items-start mb-2.5">
+                                      <div className="flex flex-col gap-1">
+                                        <span className="text-[10px] font-black tracking-widest text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 w-max uppercase">
+                                          {item.document?.type?.replace(/_/g, ' ')}
+                                        </span>
+                                        <span className="text-xs font-bold text-slate-400">
+                                          Nº {item.document?.protocolNum}/{item.document?.year}
+                                        </span>
+                                      </div>
+                                      <button 
+                                        onClick={() => baixarProjetoOriginal(item.document)}
+                                        title="Baixar Projeto Original em PDF"
+                                        className="p-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 rounded-lg border border-indigo-100 transition-colors"
+                                      >
+                                        <FileDown className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                    
+                                    <p className="text-xs sm:text-sm text-slate-800 font-semibold line-clamp-3 mb-3 leading-relaxed">
+                                      {item.document?.ementa}
+                                    </p>
 
-          </div>
-        </div>
-      </DragDropContext>
+                                    <div className="pt-2.5 border-t border-slate-100 flex flex-col gap-2.5">
+                                      <div className="flex justify-between items-center text-xs">
+                                        <div className="flex items-center gap-1.5 text-slate-500 font-medium">
+                                          <UserCircle className="w-4 h-4" />
+                                          <span className={isOProprioRelator ? "text-indigo-600 font-bold" : ""}>
+                                            {item.relator?.name || "Sem relator designado"}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      
+                                      {/* AGUARDANDO DESPACHO */}
+                                      {!item.relator && coluna.id === "AGUARDANDO_DESPACHO" && (roleLogado === 'PRESIDENTE' || roleLogado === 'ADMIN') && (
+                                        <button onClick={() => abrirModalDesignar(item)} className="w-full bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 font-bold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 border border-slate-200">
+                                          <UserCog className="w-3.5 h-3.5" /> Designar Relator
+                                        </button>
+                                      )}
+
+                                      {/* EM ANÁLISE */}
+                                      {coluna.id === "EM_ANALISE" && (
+                                        <div className="flex flex-col gap-2 w-full">
+                                          <div className="flex items-center gap-1.5 text-orange-700 text-xs font-bold bg-orange-50 border border-orange-100 w-full justify-center py-1.5 rounded-md">
+                                            <Clock className="w-3.5 h-3.5" /> Prazo: {item.prazoDias || 15} dias
+                                          </div>
+                                          
+                                          {isOProprioRelator && (
+                                            <button onClick={() => abrirModalDeParecer(item)} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 shadow-sm">
+                                              <Edit3 className="w-3.5 h-3.5" /> Redigir / Editar Parecer
+                                            </button>
+                                          )}
+                                        </div>
+                                      )}
+
+                                      {/* AGUARDANDO VOTAÇÃO */}
+                                      {coluna.id === "AGUARDANDO_VOTACAO" && (
+                                        <div className="flex flex-col gap-2 w-full">
+                                          <button onClick={() => abrirModalLeitura(item)} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 border border-slate-200">
+                                            <Eye className="w-3.5 h-3.5 text-blue-600" /> Ler Parecer Emitido
+                                          </button>
+
+                                          {(roleLogado === 'PRESIDENTE' || roleLogado === 'RELATOR' || roleLogado === 'MEMBRO' || roleLogado === 'ADMIN') && (
+                                            <button onClick={() => abrirModalAssinar(item)} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 shadow-sm">
+                                              <FileSignature className="w-3.5 h-3.5" /> Assinar / Votar
+                                            </button>
+                                          )}
+                                        </div>
+                                      )}
+
+                                      {/* CONCLUÍDO */}
+                                      {coluna.id === "CONCLUIDO" && (
+                                        <div className="flex flex-col gap-2 w-full">
+                                          <button onClick={() => abrirModalLeitura(item)} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 border border-slate-200">
+                                            <Eye className="w-3.5 h-3.5 text-blue-600" /> Ler Parecer Concluído
+                                          </button>
+                                          <button onClick={() => baixarParecerPdf(item)} className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 shadow-sm">
+                                            <Download className="w-3.5 h-3.5" /> Baixar Parecer com Votos
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </Draggable>
+                            )})}
+                            {provided.placeholder}
+                          </div>
+                        )}
+                      </Droppable>
+
+                    </div>
+                  );
+                })}
+
+              </div>
+            </div>
+          </DragDropContext>
+
+        </main>
+      </div>
 
       {/* ======================= MODAIS ======================= */}
 
@@ -633,7 +703,7 @@ const resTenant = await fetch(`${apiEnv}/tenant/${user.tenantId}`, {
                   type="month"
                   value={filtroDataDespacho}
                   onChange={e => setFiltroDataDespacho(e.target.value)}
-                  className="w-full p-2.5 rounded-lg border border-slate-300 font-bold outline-none text-slate-700 focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="w-full p-2.5 rounded-lg border border-slate-300 font-bold outline-none text-slate-700 focus:ring-2 focus:ring-blue-500 bg-white text-sm"
                   title="Filtre para encontrar os projetos com mais facilidade"
                 />
               </div>
@@ -643,7 +713,7 @@ const resTenant = await fetch(`${apiEnv}/tenant/${user.tenantId}`, {
                 <select 
                   value={comissaoAlvoDespacho} 
                   onChange={e => setComissaoAlvoDespacho(e.target.value)} 
-                  className="w-full p-3 rounded-lg border border-slate-300 font-bold outline-none text-slate-700 focus:ring-2 focus:ring-blue-500 bg-slate-50"
+                  className="w-full p-3 rounded-lg border border-slate-300 font-bold outline-none text-slate-700 focus:ring-2 focus:ring-blue-500 bg-slate-50 text-sm"
                 >
                   {comissoes.map(c => (
                     <option key={c.id} value={c.id}>{c.sigla} - {c.nome}</option>
@@ -656,7 +726,7 @@ const resTenant = await fetch(`${apiEnv}/tenant/${user.tenantId}`, {
                 <select 
                   value={documentoSelecionado} 
                   onChange={e => setDocumentoSelecionado(e.target.value)} 
-                  className="w-full p-3 rounded-lg border border-slate-300 font-bold outline-none text-slate-700 focus:ring-2 focus:ring-blue-500 bg-slate-50"
+                  className="w-full p-3 rounded-lg border border-slate-300 font-bold outline-none text-slate-700 focus:ring-2 focus:ring-blue-500 bg-slate-50 text-sm"
                 >
                   <option value="">-- Escolha um Projeto --</option>
                   {documentosFiltradosParaDespacho.map(doc => (
@@ -677,17 +747,17 @@ const resTenant = await fetch(`${apiEnv}/tenant/${user.tenantId}`, {
                   min="1"
                   value={prazoDespacho}
                   onChange={e => setPrazoDespacho(Number(e.target.value))}
-                  className="w-full p-3 rounded-lg border border-slate-300 font-bold outline-none text-slate-700 focus:ring-2 focus:ring-blue-500 bg-slate-50"
+                  className="w-full p-3 rounded-lg border border-slate-300 font-bold outline-none text-slate-700 focus:ring-2 focus:ring-blue-500 bg-slate-50 text-sm"
                 />
               </div>
             </div>
 
             <div className="flex gap-3 mt-8">
-              <button onClick={() => setShowModalDespacho(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-colors">Cancelar</button>
+              <button onClick={() => setShowModalDespacho(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-colors text-sm">Cancelar</button>
               <button 
                 onClick={despacharProjeto} 
                 disabled={!documentoSelecionado || !comissaoAlvoDespacho}
-                className="flex-1 bg-blue-600 disabled:bg-blue-300 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors shadow-lg"
+                className="flex-1 bg-blue-600 disabled:bg-blue-300 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors shadow-lg text-sm"
               >
                 Encaminhar Projeto
               </button>
@@ -710,7 +780,7 @@ const resTenant = await fetch(`${apiEnv}/tenant/${user.tenantId}`, {
               <select 
                 value={relatorSelecionado}
                 onChange={e => setRelatorSelecionado(e.target.value)}
-                className="w-full p-3 rounded-lg border border-slate-300 font-bold outline-none text-slate-700 focus:ring-2 focus:ring-indigo-500 bg-slate-50"
+                className="w-full p-3 rounded-lg border border-slate-300 font-bold outline-none text-slate-700 focus:ring-2 focus:ring-indigo-500 bg-slate-50 text-sm"
               >
                 <option value="">-- Escolha um Relator --</option>
                 {comissaoAtualObj?.membros?.map((m: any) => (
@@ -720,8 +790,8 @@ const resTenant = await fetch(`${apiEnv}/tenant/${user.tenantId}`, {
             </div>
 
             <div className="flex gap-3">
-              <button onClick={() => setShowModalDesignar(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-colors">Cancelar</button>
-              <button onClick={confirmarDesignacaoRelator} disabled={!relatorSelecionado} className="flex-1 bg-indigo-600 disabled:bg-indigo-300 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-colors shadow-lg">Confirmar Designação</button>
+              <button onClick={() => setShowModalDesignar(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-colors text-sm">Cancelar</button>
+              <button onClick={confirmarDesignacaoRelator} disabled={!relatorSelecionado} className="flex-1 bg-indigo-600 disabled:bg-indigo-300 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-colors shadow-lg text-sm">Confirmar Designação</button>
             </div>
           </div>
         </div>
@@ -741,7 +811,7 @@ const resTenant = await fetch(`${apiEnv}/tenant/${user.tenantId}`, {
               <select 
                 value={tipoVotoAssinatura}
                 onChange={e => setTipoVotoAssinatura(e.target.value)}
-                className="w-full p-3 rounded-lg border border-slate-300 font-bold outline-none text-slate-700 focus:ring-2 focus:ring-emerald-500 bg-slate-50"
+                className="w-full p-3 rounded-lg border border-slate-300 font-bold outline-none text-slate-700 focus:ring-2 focus:ring-emerald-500 bg-slate-50 text-sm"
               >
                 <option value="ACOMPANHA_RELATOR">Acompanha o Relator (Favorável)</option>
                 <option value="CONTRARIO">Voto Contrário (Rejeição ao Parecer)</option>
@@ -750,8 +820,8 @@ const resTenant = await fetch(`${apiEnv}/tenant/${user.tenantId}`, {
             </div>
 
             <div className="flex gap-3">
-              <button onClick={() => setShowModalAssinar(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-colors">Cancelar</button>
-              <button onClick={confirmarAssinatura} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-colors shadow-lg">Confirmar Voto e Assinar</button>
+              <button onClick={() => setShowModalAssinar(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-colors text-sm">Cancelar</button>
+              <button onClick={confirmarAssinatura} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-colors shadow-lg text-sm">Confirmar Voto e Assinar</button>
             </div>
           </div>
         </div>
@@ -769,7 +839,7 @@ const resTenant = await fetch(`${apiEnv}/tenant/${user.tenantId}`, {
             <div className="flex flex-col gap-4">
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1">Resultado do Parecer</label>
-                <select value={resultadoParecer} onChange={e => setResultadoParecer(e.target.value)} className="w-full p-3 rounded-lg border border-slate-300 font-bold outline-none text-slate-700 focus:ring-2 focus:ring-blue-500 bg-slate-50">
+                <select value={resultadoParecer} onChange={e => setResultadoParecer(e.target.value)} className="w-full p-3 rounded-lg border border-slate-300 font-bold outline-none text-slate-700 focus:ring-2 focus:ring-blue-500 bg-slate-50 text-sm">
                   <option value="FAVORÁVEL">Favorável à Aprovação</option>
                   <option value="CONTRÁRIO">Contrário (Pela Rejeição)</option>
                   <option value="COM_EMENDAS">Favorável com Emendas</option>
@@ -782,14 +852,14 @@ const resTenant = await fetch(`${apiEnv}/tenant/${user.tenantId}`, {
                   value={textoParecer}
                   onChange={e => setTextoParecer(e.target.value)}
                   placeholder="Redija o texto do seu parecer técnico aqui..."
-                  className="w-full p-4 rounded-lg border border-slate-300 h-40 resize-none outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full p-4 rounded-lg border border-slate-300 h-40 resize-none outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 ></textarea>
               </div>
             </div>
 
             <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowModalParecer(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-colors">Cancelar</button>
-              <button onClick={salvarParecer} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors shadow-lg">Finalizar Parecer</button>
+              <button onClick={() => setShowModalParecer(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-colors text-sm">Cancelar</button>
+              <button onClick={salvarParecer} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors shadow-lg text-sm">Finalizar Parecer</button>
             </div>
           </div>
         </div>

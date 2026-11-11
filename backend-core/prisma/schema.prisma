@@ -137,7 +137,8 @@ model Document {
 
     // Campos Gerais
     ementa  String
-    content String @db.Text
+    content String  @db.Text
+    texto   String? @db.Text // NOVO CAMPO: Artigos da Lei / Corpo do Documento
 
     // Campos Específicos para Indicações
     motivo            String? @db.Text

@@ -34,12 +34,13 @@ export default function NovoDocumento() {
   const [tipo, setTipo] = useState("INDICACAO");
   const [ementa, setEmenta] = useState("");
   const [motivo, setMotivo] = useState("");
+  const [textoArtigos, setTextoArtigos] = useState(""); // Novo estado para os artigos
   const [justificativa, setJustificativa] = useState(""); 
   const [secretariaSelecionada, setSecretariaSelecionada] = useState("");
   const [customNomeSecretaria, setCustomNomeSecretaria] = useState("");
   const [customNomeTitular, setCustomNomeTitular] = useState("");
 
-const carregarSecretarias = async (tenantId: string) => {
+  const carregarSecretarias = async (tenantId: string) => {
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/secretaria-destino/list/active/${tenantId}`);
       const data = await res.json();
@@ -48,8 +49,8 @@ const carregarSecretarias = async (tenantId: string) => {
       console.error(error);
     }
   };
+
   useEffect(() => {
-    // Colocamos tudo dentro de uma função para o verificador do React não reclamar
     const iniciarSessao = () => {
       const storedUser = localStorage.getItem("legisdocs_user");
       if (!storedUser) {
@@ -64,8 +65,6 @@ const carregarSecretarias = async (tenantId: string) => {
     iniciarSessao();
   }, [router]);
 
-  
-
   const showToast = (msg: string, type: "success" | "error" | "info") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
@@ -73,15 +72,17 @@ const carregarSecretarias = async (tenantId: string) => {
 
   const isOutros = secretariaSelecionada === "outros";
   const secretariaEncontrada = secretarias.find((s) => s.id === secretariaSelecionada);
+  const isProjetoOuEmenda = tipo.includes("PROJETO") || tipo.includes("EMENDA");
 
   const getLabels = () => {
     switch (tipo) {
       case "OFICIO": return { ementa: "Assunto do Ofício *", placeholderEmenta: "Ex: Solicitação...", conteudo: "Corpo do Ofício" };
-      case "PROJETO_LEI": return { ementa: "Ementa (Dispõe sobre...) *", placeholderEmenta: "Ex: Dispõe sobre...", conteudo: "Artigos e Justificativa" };
+      case "PROJETO_LEI_LEGISLATIVO":
+      case "PROJETO_LEI_EXECUTIVO": return { ementa: "Ementa (Dispõe sobre...) *", placeholderEmenta: "Ex: Dispõe sobre...", conteudo: "Justificativa Legislativa" };
       case "MOCAO": return { ementa: "Homenageado(a) / Assunto *", placeholderEmenta: "Ex: Michel Nunes...", conteudo: "Texto da Moção" };
       case "PARECER": return { ementa: "Projeto de Referência *", placeholderEmenta: "Ex: Projeto de Lei 024...", conteudo: "Relatório, Parecer e Conclusão" };
       case "EMENDA_ADITIVA":
-      case "EMENDA_IMPOSITIVA": return { ementa: "Projeto de Lei Referente *", placeholderEmenta: "Ex: PL Nº 010/2022", conteudo: "Artigos e Tabelas Orçamentais" };
+      case "EMENDA_IMPOSITIVA": return { ementa: "Projeto de Lei Referente *", placeholderEmenta: "Ex: PL Nº 010/2022", conteudo: "Justificativa da Emenda" };
       default: return { ementa: "Ementa (Resumo do Pedido) *", placeholderEmenta: "Ex: Indica a necessidade...", conteudo: "Justificativa Legislativa" };
     }
   };
@@ -105,7 +106,6 @@ const carregarSecretarias = async (tenantId: string) => {
     if (!user) return;
     setLoading(true);
 
-    // Tipagem explícita para evitar o erro do TypeScript
     let finalStatus: StatusDocumento = intendedStatus;
     if (intendedStatus === "ENVIADO" && user.role === "ASSESSOR") {
       finalStatus = "AGUARDANDO_ASSINATURA";
@@ -116,6 +116,7 @@ const carregarSecretarias = async (tenantId: string) => {
       status: finalStatus, 
       ementa, 
       motivo: mostrarMotivo ? motivo : "", 
+      texto: isProjetoOuEmenda ? textoArtigos : "", // Envia o texto dos artigos separado
       justificativa,
       secretariaDestino: mostrarSecretaria ? (isOutros ? customNomeSecretaria : secretariaEncontrada?.nome) : "",
       nomeSecretario: mostrarSecretaria ? (isOutros ? customNomeTitular : secretariaEncontrada?.titular) : "",
@@ -206,8 +207,8 @@ const carregarSecretarias = async (tenantId: string) => {
                   className="w-full border border-gray-300 rounded-lg p-3 mb-4 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
                 >
                   <option value="">-- Selecione um destino --</option>
-                  {secretarias.map((sec) => <option key={sec.id} value={sec.id}>{sec.nome}</option>)}
                   <option value="outros">Outros (Digitar Manualmente)</option>
+                  {secretarias.map((sec) => <option key={sec.id} value={sec.id}>{sec.nome}</option>)}
                 </select>
                 {isOutros && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -246,18 +247,28 @@ const carregarSecretarias = async (tenantId: string) => {
               </div>
             )}
             
+            <style dangerouslySetInnerHTML={{__html: `
+              .ql-editor, .ql-editor * { color: #111827 !important; opacity: 1 !important; }
+              .ql-editor { font-size: 15px; white-space: pre-wrap !important; word-wrap: break-word !important; overflow-wrap: break-word !important; overflow-x: hidden !important; }
+              .ql-editor table { width: 100% !important; table-layout: fixed !important; }
+              .ql-editor td, .ql-editor th { white-space: normal !important; word-break: break-word !important; }
+            `}} />
+
+            {/* SE FOR PROJETO DE LEI OU EMENDA, EXIBE O EDITOR DE ARTIGOS */}
+            {isProjetoOuEmenda && (
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Artigos da Lei / Corpo do Documento</label>
+                <div className="bg-white border border-gray-300 rounded-lg overflow-hidden">
+                  <ReactQuill theme="snow" value={textoArtigos} onChange={setTextoArtigos} modules={modules} className="h-64 pb-12 border-none" />
+                </div>
+              </div>
+            )}
+
+            {/* EDITOR DA JUSTIFICATIVA (Muda de título conforme o contexto) */}
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">{labels.conteudo}</label>
-              
-              <style dangerouslySetInnerHTML={{__html: `
-                .ql-editor, .ql-editor * { color: #111827 !important; opacity: 1 !important; }
-                .ql-editor { font-size: 15px; white-space: pre-wrap !important; word-wrap: break-word !important; overflow-wrap: break-word !important; overflow-x: hidden !important; }
-                .ql-editor table { width: 100% !important; table-layout: fixed !important; }
-                .ql-editor td, .ql-editor th { white-space: normal !important; word-break: break-word !important; }
-              `}} />
-
               <div className="bg-white border border-gray-300 rounded-lg overflow-hidden">
-                <ReactQuill theme="snow" value={justificativa} onChange={setJustificativa} modules={modules} className="h-96 pb-12 border-none" />
+                <ReactQuill theme="snow" value={justificativa} onChange={setJustificativa} modules={modules} className={isProjetoOuEmenda ? "h-64 pb-12 border-none" : "h-96 pb-12 border-none"} />
               </div>
             </div>
             

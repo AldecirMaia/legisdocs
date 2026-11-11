@@ -11,7 +11,6 @@ export class DocumentController {
     return this.documentService.create(body);
   }
 
-  // NOVA ROTA: Cria e grava documentos manuais injetados pela pauta
   @Post('create-manual')
   createManual(@Body() body: any) {
     return this.documentService.createManual(body);
