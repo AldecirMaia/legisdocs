@@ -7,7 +7,8 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { 
   LayoutGrid, Clock, UserCircle, Filter, Inbox, UserCog, Gavel, 
   CheckCircle2, FileSignature, Edit3, Plus, Eye, Download, FileDown, 
-  Search, Bell, ChevronDown, Menu, LogOut 
+  Search, Bell, ChevronDown, Menu, LogOut, Trash2, Settings,
+  AlertTriangle, XCircle, Info
 } from "lucide-react";
 import Sidebar from "@/app/components/Sidebar";
 
@@ -27,6 +28,21 @@ export default function KanbanComissoes() {
   const [userContext, setUserContext] = useState<any>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
+  // Modais de Feedback e Confirmação UX (substituem alert/confirm nativos)
+  const [feedbackModal, setFeedbackModal] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    type: "success" | "warning" | "error" | "info";
+  }>({ show: false, title: "", message: "", type: "info" });
+
+  const [confirmModal, setConfirmModal] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ show: false, title: "", message: "", onConfirm: () => {} });
+
   // Modais de Parecer
   const [showModalParecer, setShowModalParecer] = useState(false);
   const [tramitacaoAtiva, setTramitacaoAtiva] = useState<any>(null);
@@ -45,6 +61,17 @@ export default function KanbanComissoes() {
   const [comissaoAlvoDespacho, setComissaoAlvoDespacho] = useState("");
   const [prazoDespacho, setPrazoDespacho] = useState(15); 
 
+  // Modal de Editar Tramitação do Card (Trocar Comissão / Prazo)
+  const [showModalEditarTramitacao, setShowModalEditarTramitacao] = useState(false);
+  const [tramitacaoEmEdicao, setTramitacaoEmEdicao] = useState<any>(null);
+  const [novaComissaoCard, setNovaComissaoCard] = useState("");
+  const [novoPrazoCard, setNovoPrazoCard] = useState(15);
+
+  // Modal de Editar Dados da Comissão Criada
+  const [showModalEditarComissao, setShowModalEditarComissao] = useState(false);
+  const [editComissaoSigla, setEditComissaoSigla] = useState("");
+  const [editComissaoNome, setEditComissaoNome] = useState("");
+
   // Modal de Designar
   const [showModalDesignar, setShowModalDesignar] = useState(false);
   const [tramitacaoParaDesignar, setTramitacaoParaDesignar] = useState<any>(null);
@@ -54,6 +81,14 @@ export default function KanbanComissoes() {
   const [showModalAssinar, setShowModalAssinar] = useState(false);
   const [tramitacaoParaAssinar, setTramitacaoParaAssinar] = useState<any>(null);
   const [tipoVotoAssinatura, setTipoVotoAssinatura] = useState("ACOMPANHA_RELATOR");
+
+  const mostrarAviso = (
+    title: string,
+    message: string,
+    type: "success" | "warning" | "error" | "info" = "warning"
+  ) => {
+    setFeedbackModal({ show: true, title, message, type });
+  };
 
   useEffect(() => {
     carregarDados();
@@ -65,19 +100,23 @@ export default function KanbanComissoes() {
       if (!user.tenantId) return;
       setUserContext(user);
 
-      const apiEnv = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const apiEnv = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
       
       // VERIFICAÇÃO DE SEGURANÇA: Módulo Comissões Ativo?
       const token = localStorage.getItem("legisdocs_token");
       const resTenant = await fetch(`${apiEnv}/tenant/${user.tenantId}`, {
         headers: { 
-          'Authorization': `Bearer ${token}` 
+          Authorization: `Bearer ${token}` 
         }
       });
       if (resTenant.ok) {
         const tenantData = await resTenant.json();
         if (!tenantData.moduloComissoes) {
-          alert("O Módulo de Comissões não está contratado/ativo para a sua instituição.");
+          mostrarAviso(
+            "Módulo Não Contratado",
+            "O Módulo de Comissões não está ativo para a sua instituição.",
+            "warning"
+          );
           router.push("/painel");
           return;
         }
@@ -123,7 +162,7 @@ export default function KanbanComissoes() {
 
   const getUserRoleNaComissao = (comissaoId: string) => {
     if (!userContext) return null;
-    if (userContext.role === 'SUPER_ADMIN' || userContext.role === 'SECRETARIA') return 'ADMIN';
+    if (userContext.role === "SUPER_ADMIN" || userContext.role === "SECRETARIA") return "ADMIN";
     const comissao = comissoes.find(c => c.id === comissaoId);
     if (!comissao) return null;
     
@@ -138,11 +177,11 @@ export default function KanbanComissoes() {
 
   const abrirModalDespacho = async () => {
     try {
-      const apiEnv = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const apiEnv = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
       const token = localStorage.getItem("legisdocs_token");
       
       const res = await fetch(`${apiEnv}/document/aprovados-secretaria/${userContext.tenantId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }
       });
       
       if (res.ok) {
@@ -164,13 +203,13 @@ export default function KanbanComissoes() {
     if (doc.createdAt) {
       return doc.createdAt.startsWith(filtroDataDespacho);
     }
-    return doc.year?.toString() === filtroDataDespacho.split('-')[0];
+    return doc.year?.toString() === filtroDataDespacho.split("-")[0];
   });
 
   const despacharProjeto = async () => {
     if (!documentoSelecionado || !comissaoAlvoDespacho) return;
     try {
-      const apiEnv = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const apiEnv = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
       await fetch(`${apiEnv}/comissoes/tramitacao`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -182,8 +221,97 @@ export default function KanbanComissoes() {
       });
       setShowModalDespacho(false);
       carregarDados();
+      mostrarAviso("Projeto Despachado", "O documento foi encaminhado para a comissão com sucesso.", "success");
     } catch (e) {
       console.error(e);
+      mostrarAviso("Erro no Despacho", "Não foi possível encaminhar o projeto.", "error");
+    }
+  };
+
+  // --- EDIÇÃO E EXCLUSÃO DE TRAMITAÇÃO (CARD) PELA SECRETARIA ---
+  const abrirModalEditarTramitacao = (item: any) => {
+    setTramitacaoEmEdicao(item);
+    setNovaComissaoCard(item.comissaoId || "");
+    setNovoPrazoCard(item.prazoDias || 15);
+    setShowModalEditarTramitacao(true);
+  };
+
+  const salvarEdicaoTramitacao = async () => {
+    if (!tramitacaoEmEdicao || !novaComissaoCard) return;
+    try {
+      const apiEnv = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const trocouComissao = novaComissaoCard !== tramitacaoEmEdicao.comissaoId;
+
+      const res = await fetch(`${apiEnv}/comissoes/tramitacao/${tramitacaoEmEdicao.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          comissaoId: novaComissaoCard,
+          prazoDias: Number(novoPrazoCard),
+          ...(trocouComissao ? { relatorId: null, status: "AGUARDANDO_DESPACHO" } : {}),
+        }),
+      });
+
+      if (!res.ok) throw new Error("Falha ao atualizar tramitação");
+      setShowModalEditarTramitacao(false);
+      carregarDados();
+      mostrarAviso("Despacho Atualizado", "As alterações na comissão/prazo foram salvas.", "success");
+    } catch (e) {
+      console.error(e);
+      mostrarAviso("Erro ao Atualizar", "Não foi possível salvar as alterações deste despacho.", "error");
+    }
+  };
+
+  const excluirTramitacao = (item: any) => {
+    setConfirmModal({
+      show: true,
+      title: "Remover Projeto da Comissão?",
+      message: `Deseja realmente excluir o trâmite do ${item.document?.type?.replace(/_/g, " ")} Nº ${item.document?.protocolNum}/${item.document?.year} desta comissão?`,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, show: false }));
+        try {
+          const apiEnv = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+          const res = await fetch(`${apiEnv}/comissoes/tramitacao/${item.id}`, {
+            method: "DELETE",
+          });
+          if (!res.ok) throw new Error();
+          carregarDados();
+          mostrarAviso("Despacho Removido", "O projeto foi retirado desta comissão com sucesso.", "success");
+        } catch {
+          mostrarAviso("Erro ao Excluir", "Não foi possível remover o projeto desta comissão.", "error");
+        }
+      },
+    });
+  };
+
+  // --- EDIÇÃO DOS DADOS DA COMISSÃO CRIADA ---
+  const abrirModalEditarComissao = () => {
+    if (!comissaoAtualObj) return;
+    setEditComissaoSigla(comissaoAtualObj.sigla || "");
+    setEditComissaoNome(comissaoAtualObj.nome || "");
+    setShowModalEditarComissao(true);
+  };
+
+  const salvarEdicaoComissao = async () => {
+    if (!comissaoAtualObj || !editComissaoSigla.trim() || !editComissaoNome.trim()) return;
+    try {
+      const apiEnv = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const res = await fetch(`${apiEnv}/comissoes/${comissaoAtualObj.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sigla: editComissaoSigla.trim(),
+          nome: editComissaoNome.trim(),
+        }),
+      });
+
+      if (!res.ok) throw new Error("Erro ao editar comissão");
+      setShowModalEditarComissao(false);
+      carregarDados();
+      mostrarAviso("Comissão Atualizada", "Os dados da comissão foram atualizados com sucesso.", "success");
+    } catch (e) {
+      console.error(e);
+      mostrarAviso("Erro ao Salvar", "Não foi possível salvar as alterações da comissão.", "error");
     }
   };
 
@@ -196,7 +324,7 @@ export default function KanbanComissoes() {
   const confirmarDesignacaoRelator = async () => {
     if (!relatorSelecionado) return;
     try {
-      const apiEnv = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const apiEnv = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
       await fetch(`${apiEnv}/comissoes/tramitacao/${tramitacaoParaDesignar.id}/relator`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -218,7 +346,7 @@ export default function KanbanComissoes() {
 
   const salvarParecer = async () => {
     try {
-      const apiEnv = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const apiEnv = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
       await fetch(`${apiEnv}/comissoes/tramitacao/${tramitacaoAtiva.id}/parecer`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -247,7 +375,7 @@ export default function KanbanComissoes() {
 
   const confirmarAssinatura = async () => {
     try {
-      const apiEnv = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const apiEnv = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
       await fetch(`${apiEnv}/comissoes/tramitacao/${tramitacaoParaAssinar.id}/assinar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -263,28 +391,107 @@ export default function KanbanComissoes() {
     }
   };
 
-  const baixarProjetoOriginal = (doc: any) => {
-    if (doc?.fileUrl) {
-      window.open(doc.fileUrl, '_blank');
-    } else {
-      alert("O arquivo PDF deste projeto ainda não foi anexado ao sistema pela Secretaria.");
+  // DOWNLOAD DO PROJETO ORIGINAL (Com fallback e UX moderna)
+  const baixarProjetoOriginal = async (item: any) => {
+    const doc = item?.document;
+    const docId = doc?.id || item?.documentId;
+
+    if (!doc && !docId) {
+      mostrarAviso(
+        "Documento não localizado",
+        "Não foi possível identificar o projeto vinculado a este card.",
+        "error"
+      );
+      return;
     }
+
+    const apiEnv = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const token = localStorage.getItem("legisdocs_token");
+
+    let docCompleto = doc;
+    let rawUrl =
+      doc?.fileUrl || doc?.pdfUrl || doc?.arquivoUrl || doc?.anexoUrl || doc?.url;
+
+    if (!rawUrl && docId) {
+      try {
+        const resDoc = await fetch(`${apiEnv}/document/${docId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (resDoc.ok) {
+          docCompleto = await resDoc.json();
+          rawUrl =
+            docCompleto?.fileUrl ||
+            docCompleto?.pdfUrl ||
+            docCompleto?.arquivoUrl ||
+            docCompleto?.anexoUrl ||
+            docCompleto?.url;
+        }
+      } catch (err) {
+        console.error("Erro ao consultar documento:", err);
+      }
+    }
+
+    if (rawUrl) {
+      const urlFinal = rawUrl.startsWith("http")
+        ? rawUrl
+        : `${apiEnv}${rawUrl.startsWith("/") ? "" : "/"}${rawUrl}`;
+      window.open(urlFinal, "_blank");
+      return;
+    }
+
+    // Fallback: se o documento foi redigido no editor sem upload externo de PDF, abre visualização para impressão/PDF
+    if (docCompleto?.content || docCompleto?.texto || docCompleto?.ementa) {
+      const janela = window.open("", "_blank");
+      if (janela) {
+        janela.document.write(`
+          <html>
+            <head>
+              <title>${docCompleto.type?.replace(/_/g, " ")} Nº ${docCompleto.protocolNum}/${docCompleto.year}</title>
+              <style>
+                body { font-family: Arial, sans-serif; padding: 48px; color: #1e293b; line-height: 1.6; max-width: 800px; margin: 0 auto; }
+                .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 28px; }
+                .meta { background: #f8fafc; border: 1px solid #e2e8f0; padding: 14px; border-radius: 8px; margin-bottom: 24px; font-size: 13px; }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <h2 style="margin:0;">PODER LEGISLATIVO</h2>
+                <h3 style="margin:6px 0 0 0;">${docCompleto.type?.replace(/_/g, " ")} Nº ${docCompleto.protocolNum}/${docCompleto.year}</h3>
+              </div>
+              <div class="meta">
+                <strong>Ementa:</strong> ${docCompleto.ementa || "Não informada"}
+              </div>
+              <div>${(docCompleto.content || docCompleto.texto || docCompleto.ementa || "").replace(/\n/g, "<br/>")}</div>
+            </body>
+          </html>
+        `);
+        janela.document.close();
+        janela.print();
+        return;
+      }
+    }
+
+    mostrarAviso(
+      "Arquivo PDF Indisponível",
+      "O arquivo PDF deste projeto ainda não foi anexado ao sistema pela Secretaria.",
+      "warning"
+    );
   };
 
   const baixarParecerPdf = (item: any) => {
     const assinaturasHtml = item.assinaturas && item.assinaturas.length > 0 
       ? item.assinaturas.map((a: any) => `
           <div style="margin-bottom: 10px; border-bottom: 1px dashed #eee; padding-bottom: 8px;">
-            <strong>${a.user?.name || 'Membro'}</strong> - 
-            <span style="color: ${a.tipoVoto === 'CONTRARIO' ? '#d9534f' : '#5cb85c'}; font-weight: bold;">
-              ${a.tipoVoto === 'ACOMPANHA_RELATOR' ? 'Acompanha o Relator' : a.tipoVoto === 'CONTRARIO' ? 'Voto Contrário' : a.tipoVoto}
+            <strong>${a.user?.name || "Membro"}</strong> - 
+            <span style="color: ${a.tipoVoto === "CONTRARIO" ? "#d9534f" : "#5cb85c"}; font-weight: bold;">
+              ${a.tipoVoto === "ACOMPANHA_RELATOR" ? "Acompanha o Relator" : a.tipoVoto === "CONTRARIO" ? "Voto Contrário" : a.tipoVoto}
             </span>
-            <br/><small style="color: #777;">Assinado digitalmente em ${new Date(a.createdAt || Date.now()).toLocaleDateString('pt-BR')}</small>
+            <br/><small style="color: #777;">Assinado digitalmente em ${new Date(a.createdAt || Date.now()).toLocaleDateString("pt-BR")}</small>
           </div>
-        `).join('')
+        `).join("")
       : '<p style="color: #777; font-style: italic;">Nenhuma assinatura registrada até o momento.</p>';
 
-    const janela = window.open('', '_blank');
+    const janela = window.open("", "_blank");
     if (janela) {
       janela.document.write(`
         <html>
@@ -302,13 +509,13 @@ export default function KanbanComissoes() {
               <h2>CÂMARA MUNICIPAL DE VEREADORES</h2>
               <h3>PARECER DA COMISSÃO DE TRÂMITE</h3>
             </div>
-            <p><strong>Projeto:</strong> ${item.document?.type?.replace('_', ' ')} Nº ${item.document?.protocolNum}/${item.document?.year}</p>
+            <p><strong>Projeto:</strong> ${item.document?.type?.replace("_", " ")} Nº ${item.document?.protocolNum}/${item.document?.year}</p>
             <p><strong>Ementa:</strong> ${item.document?.ementa}</p>
-            <p><strong>Relator:</strong> ${item.relator?.name || 'Não informado'}</p>
-            <p><strong>Voto do Relator:</strong> <span class="voto-badge">${item.resultado || 'FAVORÁVEL'}</span></p>
+            <p><strong>Relator:</strong> ${item.relator?.name || "Não informado"}</p>
+            <p><strong>Voto do Relator:</strong> <span class="voto-badge">${item.resultado || "FAVORÁVEL"}</span></p>
             <hr style="border: 0; border-top: 1px solid #ddd; margin: 20px 0;" />
             <h3>Fundamentação Técnica:</h3>
-            <p>${item.parecerFinal ? item.parecerFinal.replace(/\n/g, '<br>') : 'Nenhum texto redigido.'}</p>
+            <p>${item.parecerFinal ? item.parecerFinal.replace(/\n/g, "<br>") : "Nenhum texto redigido."}</p>
             
             <hr style="border: 0; border-top: 1px solid #ddd; margin: 30px 0 20px 0;" />
             <h3>Votos e Assinaturas dos Membros:</h3>
@@ -332,8 +539,12 @@ export default function KanbanComissoes() {
     if (!destination) return;
     if (source.droppableId === destination.droppableId && source.index === destination.index) return;
     
-    if (roleLogado !== 'ADMIN' && roleLogado !== 'PRESIDENTE') {
-      alert("Apenas a Secretaria ou o Presidente da comissão podem forçar a movimentação manual do card.");
+    if (roleLogado !== "ADMIN" && roleLogado !== "PRESIDENTE") {
+      mostrarAviso(
+        "Ação Restrita",
+        "Apenas a Secretaria ou o Presidente da comissão podem movimentar os cards manualmente.",
+        "warning"
+      );
       return;
     }
 
@@ -353,7 +564,7 @@ export default function KanbanComissoes() {
     });
 
     try {
-      const apiEnv = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const apiEnv = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
       await fetch(`${apiEnv}/comissoes/tramitacao/${draggableId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -370,7 +581,13 @@ export default function KanbanComissoes() {
     router.push("/");
   };
 
-  if (loading || !userContext) return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-slate-500 font-medium">A carregar painel de comissões...</div>;
+  if (loading || !userContext) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 text-slate-500 font-medium">
+        A carregar painel de comissões...
+      </div>
+    );
+  }
 
   return (
     <div lang="pt-BR" className="flex h-screen bg-gray-50 overflow-hidden font-sans">
@@ -442,12 +659,12 @@ export default function KanbanComissoes() {
               </h1>
               <p className="text-slate-500 font-medium mt-1 text-xs sm:text-sm flex flex-wrap items-center gap-2">
                 Gerencie o fluxo de relatores e prazos legais dos projetos.
-                {roleLogado && roleLogado !== 'ADMIN' && (
+                {roleLogado && roleLogado !== "ADMIN" && (
                   <span className="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded text-xs font-bold border border-indigo-200">
-                    Seu perfil nesta comissão: {roleLogado.replace('_', ' ')}
+                    Seu perfil nesta comissão: {roleLogado.replace("_", " ")}
                   </span>
                 )}
-                {roleLogado === 'ADMIN' && (
+                {roleLogado === "ADMIN" && (
                   <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-xs font-bold border border-slate-300">
                     Acesso Administrativo (Secretaria)
                   </span>
@@ -456,7 +673,7 @@ export default function KanbanComissoes() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-              {roleLogado === 'ADMIN' && (
+              {roleLogado === "ADMIN" && (
                 <button 
                   onClick={abrirModalDespacho}
                   className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2.5 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 text-xs sm:text-sm w-full sm:w-auto"
@@ -478,6 +695,18 @@ export default function KanbanComissoes() {
                     <option key={c.id} value={c.id}>{c.sigla} - {c.nome}</option>
                   ))}
                 </select>
+
+                {/* Botão para Secretaria editar dados da comissão selecionada */}
+                {roleLogado === "ADMIN" && comissaoAtualObj && (
+                  <button
+                    type="button"
+                    onClick={abrirModalEditarComissao}
+                    title="Editar nome/sigla desta comissão"
+                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  >
+                    <Settings className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -505,7 +734,7 @@ export default function KanbanComissoes() {
                         </span>
                       </div>
 
-                      <Droppable droppableId={coluna.id} isDropDisabled={roleLogado !== 'ADMIN' && roleLogado !== 'PRESIDENTE'}>
+                      <Droppable droppableId={coluna.id} isDropDisabled={roleLogado !== "ADMIN" && roleLogado !== "PRESIDENTE"}>
                         {(provided, snapshot) => (
                           <div 
                             {...provided.droppableProps}
@@ -522,9 +751,17 @@ export default function KanbanComissoes() {
 
                             {itensColuna.map((item: any, index: number) => {
                               const isOProprioRelator = item.relatorId === userContext?.id;
+                              const podeEditarDespacho =
+                                roleLogado === "ADMIN" &&
+                                (coluna.id === "AGUARDANDO_DESPACHO" || coluna.id === "EM_ANALISE");
+                              const podeExcluirDespacho =
+                                roleLogado === "ADMIN" &&
+                                (coluna.id === "AGUARDANDO_DESPACHO" ||
+                                  coluna.id === "EM_ANALISE" ||
+                                  coluna.id === "AGUARDANDO_VOTACAO");
                               
                               return (
-                              <Draggable key={item.id} draggableId={item.id} index={index} isDragDisabled={roleLogado !== 'ADMIN' && roleLogado !== 'PRESIDENTE'}>
+                              <Draggable key={item.id} draggableId={item.id} index={index} isDragDisabled={roleLogado !== "ADMIN" && roleLogado !== "PRESIDENTE"}>
                                 {(provided, snapshot) => (
                                   <div
                                     ref={provided.innerRef}
@@ -534,22 +771,50 @@ export default function KanbanComissoes() {
                                       snapshot.isDragging ? "shadow-2xl shadow-blue-900/10 rotate-2 scale-105 ring-2 ring-blue-500 cursor-grabbing" : "shadow-sm hover:border-blue-300"
                                     }`}
                                   >
-                                    <div className="flex justify-between items-start mb-2.5">
+                                    <div className="flex justify-between items-start mb-2.5 gap-2">
                                       <div className="flex flex-col gap-1">
                                         <span className="text-[10px] font-black tracking-widest text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 w-max uppercase">
-                                          {item.document?.type?.replace(/_/g, ' ')}
+                                          {item.document?.type?.replace(/_/g, " ")}
                                         </span>
                                         <span className="text-xs font-bold text-slate-400">
                                           Nº {item.document?.protocolNum}/{item.document?.year}
                                         </span>
                                       </div>
-                                      <button 
-                                        onClick={() => baixarProjetoOriginal(item.document)}
-                                        title="Baixar Projeto Original em PDF"
-                                        className="p-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 rounded-lg border border-indigo-100 transition-colors"
-                                      >
-                                        <FileDown className="w-4 h-4" />
-                                      </button>
+
+                                      <div className="flex items-center gap-1.5">
+                                        {/* Editar Comissão/Prazo: permitido APENAS em AGUARDANDO_DESPACHO e EM_ANALISE */}
+                                        {podeEditarDespacho && (
+                                          <button
+                                            type="button"
+                                            onClick={() => abrirModalEditarTramitacao(item)}
+                                            title="Alterar comissão ou prazo deste despacho"
+                                            className="p-1.5 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg border border-amber-200 transition-colors"
+                                          >
+                                            <Edit3 className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
+
+                                        {/* Excluir Despacho: permitido em AGUARDANDO_DESPACHO, EM_ANALISE e SOMENTE EXCLUIR em AGUARDANDO_VOTACAO */}
+                                        {podeExcluirDespacho && (
+                                          <button
+                                            type="button"
+                                            onClick={() => excluirTramitacao(item)}
+                                            title="Excluir projeto desta comissão"
+                                            className="p-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg border border-red-200 transition-colors"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
+
+                                        <button 
+                                          type="button"
+                                          onClick={() => baixarProjetoOriginal(item)}
+                                          title="Baixar Projeto Original em PDF"
+                                          className="p-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 rounded-lg border border-indigo-100 transition-colors"
+                                        >
+                                          <FileDown className="w-4 h-4" />
+                                        </button>
+                                      </div>
                                     </div>
                                     
                                     <p className="text-xs sm:text-sm text-slate-800 font-semibold line-clamp-3 mb-3 leading-relaxed">
@@ -567,7 +832,7 @@ export default function KanbanComissoes() {
                                       </div>
                                       
                                       {/* AGUARDANDO DESPACHO */}
-                                      {!item.relator && coluna.id === "AGUARDANDO_DESPACHO" && (roleLogado === 'PRESIDENTE' || roleLogado === 'ADMIN') && (
+                                      {!item.relator && coluna.id === "AGUARDANDO_DESPACHO" && (roleLogado === "PRESIDENTE" || roleLogado === "ADMIN") && (
                                         <button onClick={() => abrirModalDesignar(item)} className="w-full bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 font-bold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 border border-slate-200">
                                           <UserCog className="w-3.5 h-3.5" /> Designar Relator
                                         </button>
@@ -595,7 +860,7 @@ export default function KanbanComissoes() {
                                             <Eye className="w-3.5 h-3.5 text-blue-600" /> Ler Parecer Emitido
                                           </button>
 
-                                          {(roleLogado === 'PRESIDENTE' || roleLogado === 'RELATOR' || roleLogado === 'MEMBRO' || roleLogado === 'ADMIN') && (
+                                          {(roleLogado === "PRESIDENTE" || roleLogado === "RELATOR" || roleLogado === "MEMBRO" || roleLogado === "ADMIN") && (
                                             <button onClick={() => abrirModalAssinar(item)} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 shadow-sm">
                                               <FileSignature className="w-3.5 h-3.5" /> Assinar / Votar
                                             </button>
@@ -635,7 +900,171 @@ export default function KanbanComissoes() {
         </main>
       </div>
 
-      {/* ======================= MODAIS ======================= */}
+      {/* ======================= MODAIS DE UX (FEEDBACK & CONFIRMAÇÃO) ======================= */}
+
+      {feedbackModal.show && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 max-w-sm w-full text-center animate-in zoom-in-95 duration-150">
+            <div className="mx-auto mb-4 w-14 h-14 rounded-full flex items-center justify-center bg-slate-50 border border-slate-100">
+              {feedbackModal.type === "success" && <CheckCircle2 className="w-8 h-8 text-emerald-500" />}
+              {feedbackModal.type === "warning" && <AlertTriangle className="w-8 h-8 text-amber-500" />}
+              {feedbackModal.type === "error" && <XCircle className="w-8 h-8 text-red-500" />}
+              {feedbackModal.type === "info" && <Info className="w-8 h-8 text-blue-500" />}
+            </div>
+            <h3 className="text-lg font-extrabold text-slate-900 mb-1.5">{feedbackModal.title}</h3>
+            <p className="text-sm text-slate-600 mb-6 leading-relaxed">{feedbackModal.message}</p>
+            <button
+              type="button"
+              onClick={() => setFeedbackModal((prev) => ({ ...prev, show: false }))}
+              className="w-full py-3 rounded-xl font-bold text-sm text-white bg-slate-900 hover:bg-slate-800 transition-colors shadow-sm"
+            >
+              Entendi
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmModal.show && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 max-w-sm w-full text-center animate-in zoom-in-95 duration-150">
+            <div className="mx-auto mb-4 w-14 h-14 rounded-full flex items-center justify-center bg-red-50 border border-red-100">
+              <Trash2 className="w-7 h-7 text-red-600" />
+            </div>
+            <h3 className="text-lg font-extrabold text-slate-900 mb-1.5">{confirmModal.title}</h3>
+            <p className="text-sm text-slate-600 mb-6 leading-relaxed">{confirmModal.message}</p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmModal((prev) => ({ ...prev, show: false }))}
+                className="flex-1 py-2.5 rounded-xl font-bold text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmModal.onConfirm}
+                className="flex-1 py-2.5 rounded-xl font-bold text-sm text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm"
+              >
+                Sim, Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================= MODAIS DE FLUXO ======================= */}
+
+      {/* MODAL EDITAR COMISSÃO / PRAZO DO DESPACHO (Apenas AGUARDANDO_DESPACHO e EM_ANALISE) */}
+      {showModalEditarTramitacao && tramitacaoEmEdicao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-bold mb-2 text-slate-800 flex items-center gap-2">
+              <Edit3 className="w-5 h-5 text-amber-600" /> Editar Despacho na Comissão
+            </h3>
+            <p className="text-xs text-slate-500 mb-5 font-medium">
+              Projeto: <strong>{tramitacaoEmEdicao.document?.type?.replace(/_/g, " ")} Nº {tramitacaoEmEdicao.document?.protocolNum}/{tramitacaoEmEdicao.document?.year}</strong>
+            </p>
+
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Comissão Responsável</label>
+                <select
+                  value={novaComissaoCard}
+                  onChange={(e) => setNovaComissaoCard(e.target.value)}
+                  className="w-full p-3 rounded-lg border border-slate-300 font-bold outline-none text-slate-700 focus:ring-2 focus:ring-amber-500 bg-slate-50 text-sm"
+                >
+                  {comissoes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.sigla} - {c.nome}
+                    </option>
+                  ))}
+                </select>
+                {novaComissaoCard !== tramitacaoEmEdicao.comissaoId && tramitacaoEmEdicao.relatorId && (
+                  <p className="text-[11px] text-amber-700 mt-1.5 font-semibold">
+                    Atenção: ao transferir para outra comissão, o relator atual será desvinculado.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Prazo Regimental (Dias)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={novoPrazoCard}
+                  onChange={(e) => setNovoPrazoCard(Number(e.target.value))}
+                  className="w-full p-3 rounded-lg border border-slate-300 font-bold outline-none text-slate-700 focus:ring-2 focus:ring-amber-500 bg-slate-50 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowModalEditarTramitacao(false)}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-colors text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={salvarEdicaoTramitacao}
+                className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-xl transition-colors shadow-lg text-sm"
+              >
+                Salvar Alterações
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDITAR DADOS DA COMISSÃO CRIADA */}
+      {showModalEditarComissao && comissaoAtualObj && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-bold mb-4 text-slate-800 flex items-center gap-2">
+              <Settings className="w-5 h-5 text-blue-600" /> Editar Comissão
+            </h3>
+
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Sigla da Comissão</label>
+                <input
+                  type="text"
+                  value={editComissaoSigla}
+                  onChange={(e) => setEditComissaoSigla(e.target.value)}
+                  placeholder="Ex: CCJ"
+                  className="w-full p-3 rounded-lg border border-slate-300 font-bold outline-none text-slate-700 focus:ring-2 focus:ring-blue-500 bg-slate-50 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Nome Completo</label>
+                <input
+                  type="text"
+                  value={editComissaoNome}
+                  onChange={(e) => setEditComissaoNome(e.target.value)}
+                  placeholder="Ex: Comissão de Constituição e Justiça"
+                  className="w-full p-3 rounded-lg border border-slate-300 font-bold outline-none text-slate-700 focus:ring-2 focus:ring-blue-500 bg-slate-50 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowModalEditarComissao(false)}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-colors text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={salvarEdicaoComissao}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors shadow-lg text-sm"
+              >
+                Salvar Comissão
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL LER PARECER */}
       {showModalLeitura && parecerEmLeitura && (
@@ -645,12 +1074,12 @@ export default function KanbanComissoes() {
               <Eye className="w-5 h-5 text-blue-600" /> Leitura do Parecer Técnico
             </h3>
             <p className="text-xs text-slate-500 mb-4 font-semibold">
-              Projeto: {parecerEmLeitura.document?.type?.replace('_', ' ')} Nº {parecerEmLeitura.document?.protocolNum}/{parecerEmLeitura.document?.year}
+              Projeto: {parecerEmLeitura.document?.type?.replace("_", " ")} Nº {parecerEmLeitura.document?.protocolNum}/{parecerEmLeitura.document?.year}
             </p>
 
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4 flex justify-between text-xs font-bold text-slate-700">
-              <span>Relator: {parecerEmLeitura.relator?.name || 'Não definido'}</span>
-              <span className="text-blue-600 uppercase">Voto: {parecerEmLeitura.resultado || 'FAVORÁVEL'}</span>
+              <span>Relator: {parecerEmLeitura.relator?.name || "Não definido"}</span>
+              <span className="text-blue-600 uppercase">Voto: {parecerEmLeitura.resultado || "FAVORÁVEL"}</span>
               <span>Votos Registrados: {parecerEmLeitura.assinaturas?.length || 0}</span>
             </div>
 
@@ -666,9 +1095,9 @@ export default function KanbanComissoes() {
                 )}
                 {parecerEmLeitura.assinaturas?.map((a: any, idx: number) => (
                   <div key={idx} className="flex justify-between items-center text-xs bg-white p-2 rounded border border-slate-100">
-                    <span className="font-bold text-slate-700">{a.user?.name || 'Membro'}</span>
-                    <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${a.tipoVoto === 'CONTRARIO' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                      {a.tipoVoto === 'ACOMPANHA_RELATOR' ? 'Acompanha o Relator' : a.tipoVoto}
+                    <span className="font-bold text-slate-700">{a.user?.name || "Membro"}</span>
+                    <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${a.tipoVoto === "CONTRARIO" ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}>
+                      {a.tipoVoto === "ACOMPANHA_RELATOR" ? "Acompanha o Relator" : a.tipoVoto}
                     </span>
                   </div>
                 ))}
@@ -676,7 +1105,7 @@ export default function KanbanComissoes() {
             </div>
 
             <div className="flex gap-3">
-              {parecerEmLeitura.status === 'CONCLUIDO' && (
+              {parecerEmLeitura.status === "CONCLUIDO" && (
                 <button onClick={() => baixarParecerPdf(parecerEmLeitura)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
                   <Download className="w-4 h-4" /> Baixar PDF com Votos
                 </button>
@@ -731,7 +1160,7 @@ export default function KanbanComissoes() {
                   <option value="">-- Escolha um Projeto --</option>
                   {documentosFiltradosParaDespacho.map(doc => (
                     <option key={doc.id} value={doc.id}>
-                      {doc.type.replace('_', ' ')} Nº {doc.protocolNum}/{doc.year}
+                      {doc.type.replace("_", " ")} Nº {doc.protocolNum}/{doc.year}
                     </option>
                   ))}
                 </select>
@@ -784,7 +1213,7 @@ export default function KanbanComissoes() {
               >
                 <option value="">-- Escolha um Relator --</option>
                 {comissaoAtualObj?.membros?.map((m: any) => (
-                  <option key={m.userId} value={m.userId}>{m.user?.name} ({m.cargo.replace('_', ' ')})</option>
+                  <option key={m.userId} value={m.userId}>{m.user?.name} ({m.cargo.replace("_", " ")})</option>
                 ))}
               </select>
             </div>

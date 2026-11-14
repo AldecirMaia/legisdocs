@@ -62,18 +62,20 @@ enum TipoVotoParecer {
 // === TABELAS ===
 
 model Tenant {
-    id              String   @id @default(uuid())
-    name            String
-    slug            String   @unique
-    isActive        Boolean  @default(true) // Super Admin usa para bloquear/liberar
-    createdAt       DateTime @default(now())
-    updatedAt       DateTime @updatedAt
+    id               String   @id @default(uuid())
+    name             String
+    slug             String   @unique
+    isActive         Boolean  @default(true) // Super Admin usa para bloquear/liberar
+    createdAt        DateTime @default(now())
+    updatedAt        DateTime @updatedAt
     // Configurações Globais para Documentos Oficiais
-    prefeitoNome    String? // Ex: "Maria Divanize Alves de Oliveira"
-    palacioNome     String? // Ex: "Manoel Alves Bezerra"
-    salaSessoesNome String? // Ex: "Vereador José Fernandes de Queiroz"
-    cidadeEstado    String? // Ex: "Baraúna-RN"
-    artigoIndicacao String? // Ex: "artigo 103, Parágrafo 1º do Regimento Interno"
+    prefeitoNome     String? // Ex: "Maria Divanize Alves de Oliveira"
+    palacioNome      String? // Ex: "Manoel Alves Bezerra"
+    salaSessoesNome  String? // Ex: "Vereador José Fernandes de Queiroz"
+    cidadeEstado     String? // Ex: "Baraúna-RN"
+    artigoIndicacao  String? // Ex: "artigo 103, Parágrafo 1º do Regimento Interno"
+    artigoProjetoLei String?
+    estadoNome       String?
 
     moduloPlenario  Boolean @default(false)
     moduloAtas      Boolean @default(false)
@@ -161,6 +163,7 @@ model Document {
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
     sessaoId  String?
+    faseAtual String   @default("NOVO")
     sessao    Sessao?  @relation(fields: [sessaoId], references: [id])
 
     tramitacoes TramitacaoComissao[]

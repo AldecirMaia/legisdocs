@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
   AlertTriangle, CheckCircle, X, Info, XCircle, Search, 
-  Bell, ChevronDown, Menu, LogOut, Plus, Trash2, Edit3, Printer, Send, Vote, FileText
+  Bell, ChevronDown, Menu, LogOut, Plus, Trash2, Edit3, Printer, Send, Vote, FileText, Calendar
 } from "lucide-react";
 import Sidebar from "@/app/components/Sidebar";
 
@@ -22,6 +22,7 @@ interface DocPauta {
   protocolNum: number;
   year: number;
   ementa: string;
+  faseAtual?: string; // NOVO: Campo vindo do backend para saber a fase (LEITURA, 1_VOTACAO, etc)
   author?: { name: string; partido?: string };
   gabinete?: { 
     name: string;
@@ -76,8 +77,11 @@ export default function PautaSessao() {
   const [alertConfig, setAlertConfig] = useState<{ show: boolean, message: string, type: 'success' | 'error' | 'warning' }>({ show: false, message: '', type: 'success' });
   const [showConfirmEnviar, setShowConfirmEnviar] = useState(false);
 
+  // Filtros Existentes + NOVOS Filtros de Data
   const [buscaDoc, setBuscaDoc] = useState("");
   const [filtroTipoDoc, setFiltroTipoDoc] = useState("Todos");
+  const [dataFiltroInicio, setDataFiltroInicio] = useState("");
+  const [dataFiltroFim, setDataFiltroFim] = useState("");
 
   const showAlert = (message: string, type: 'success' | 'error' | 'warning') => {
     setAlertConfig({ show: true, message, type });
@@ -104,13 +108,30 @@ export default function PautaSessao() {
         nomePropositor = "PODER EXECUTIVO (PREFEITURA)";
     }
 
+    // LÓGICA AUTOMÁTICA DE TRAMITAÇÃO COM BASE NA FASE DO DOCUMENTO
+    let tramitacaoSugerida: "LEITURA" | "VOTAÇÃO" = isExpediente ? "LEITURA" : "VOTAÇÃO";
+    let turnoSugerido = "";
+
+    if (isLei) {
+      if (!doc.faseAtual || doc.faseAtual === "NOVO") {
+        tramitacaoSugerida = "LEITURA";
+      } else if (doc.faseAtual === "LEITURA_CONCLUIDA") {
+        tramitacaoSugerida = "VOTAÇÃO";
+        turnoSugerido = "1ª Votação";
+      } else if (doc.faseAtual === "1_VOTACAO_CONCLUIDA") {
+        tramitacaoSugerida = "VOTAÇÃO";
+        turnoSugerido = "2ª Votação";
+      }
+    }
+
     return {
       id: doc.id,
       type: typeFormatted,
       numero: `${String(doc.protocolNum).padStart(3, '0')}/${doc.year}`,
       ementa: doc.ementa,
       propositor: nomePropositor,
-      tramitacao: isExpediente || isLei ? "LEITURA" : "VOTAÇÃO",
+      tramitacao: tramitacaoSugerida,
+      turnoVotacao: turnoSugerido,
       ...(isLei && { regime: "NORMAL", fase: "LEITURA" })
     };
   };
@@ -239,7 +260,29 @@ export default function PautaSessao() {
       else throw new Error();
     } catch (error) { console.error(error); showAlert("Erro ao enviar pauta.", "error"); } finally { setEnviando(false); }
   };
+const irParaLancamentoAta = () => {
+  if (itensPauta.length === 0) {
+    return showAlert("Adicione pelo menos um documento na pauta antes de lançar para a Ata.", "warning");
+  }
+  const pendentes = itensPauta.filter(i => i.tramitacao === "VOTAÇÃO" && !i.turnoVotacao);
+  if (pendentes.length > 0) {
+    return showAlert("Defina o turno de votação de todos os projetos da Ordem do Dia.", "warning");
+  }
 
+  const rascunhoPauta = {
+    nomeSessao,
+    numeroSessao,
+    tipoSessao,
+    periodoSessao,
+    legislatura,
+    dataSessao,
+    horarioSessao,
+    itens: itensPauta,
+  };
+
+  sessionStorage.setItem("legisdocs_pauta_para_ata", JSON.stringify(rascunhoPauta));
+  router.push("/painel/pauta/ata-manual");
+};
   const iniciarImpressao = () => {
     const votacoes = itensPauta.filter(i => i.tramitacao === "VOTAÇÃO");
     if (votacoes.length > 0 && votacoes.some(v => !v.turnoVotacao)) {
@@ -274,10 +317,21 @@ export default function PautaSessao() {
   const expediente = itensPauta.filter(i => i.tramitacao === "LEITURA");
   const ordemDia = itensPauta.filter(i => i.tramitacao === "VOTAÇÃO");
 
+  // FILTRAGEM ATUALIZADA COM O CORTE DE DATA
   const documentosFiltradosBiblioteca = todosDocumentos.filter(doc => {
     const matchBusca = (doc.protocolNum?.toString().includes(buscaDoc) || doc.ementa?.toLowerCase().includes(buscaDoc.toLowerCase()) || (doc.author?.name || doc.gabinete?.name || "").toLowerCase().includes(buscaDoc.toLowerCase()));
     const matchTipo = filtroTipoDoc === "Todos" || doc.type === filtroTipoDoc;
-    return matchBusca && matchTipo;
+    
+    // Novo Filtro de Data
+    let matchData = true;
+    if (dataFiltroInicio && dataFiltroFim) {
+      const docDate = new Date(doc.createdAt).getTime();
+      const start = new Date(dataFiltroInicio).getTime();
+      const end = new Date(dataFiltroFim).getTime() + 86399999; // Final do dia
+      matchData = docDate >= start && docDate <= end;
+    }
+
+    return matchBusca && matchTipo && matchData;
   }).sort((a, b) => {
     const aNaPauta = itensPauta.some(p => p.id === a.id);
     const bNaPauta = itensPauta.some(p => p.id === b.id);
@@ -286,11 +340,26 @@ export default function PautaSessao() {
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
+  // FUNÇÃO AUXILIAR PARA O BADGE DE FASE
+  const getFaseBadge = (doc: DocPauta) => {
+    const fase = doc.faseAtual || "NOVO";
+    if (["INDICACAO", "REQUERIMENTO", "OFICIO", "MOCAO"].includes(doc.type)) {
+      return { text: "Leitura", color: "bg-gray-100 text-gray-600" };
+    }
+    switch (fase) {
+      case "NOVO": return { text: "P/ Leitura", color: "bg-blue-100 text-blue-700" };
+      case "LEITURA_CONCLUIDA": return { text: "P/ 1ª Votação", color: "bg-orange-100 text-orange-700" };
+      case "1_VOTACAO_CONCLUIDA": return { text: "P/ 2ª Votação", color: "bg-purple-100 text-purple-700" };
+      default: return { text: "Em Tramitação", color: "bg-indigo-100 text-indigo-700" };
+    }
+  };
+
   if (!user) return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500 font-medium">A carregar interface...</div>;
 
   return (
     <div lang="pt-BR" className="flex h-screen bg-gray-50 overflow-hidden font-sans print:bg-white">
       
+      {/* (MODAIS DE ALERTAS E CONFIRMAÇÕES MANTIDOS COMO ESTAVAM) */}
       {alertConfig.show && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4 animate-in fade-in no-print">
           <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full">
@@ -368,6 +437,7 @@ export default function PautaSessao() {
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* HEADER (MANTIDO O MESMO) */}
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 z-10 flex-shrink-0 no-print">
           <div className="flex items-center gap-4">
             <button onClick={() => setIsSidebarOpen(true)} className="md:hidden text-gray-500 hover:text-gray-800"><Menu className="w-6 h-6" /></button>
@@ -378,7 +448,6 @@ export default function PautaSessao() {
               </div>
             </div>
           </div>
-
           <div className="flex items-center gap-5 ml-4">
             <button className="text-gray-500 hover:text-blue-600"><Bell className="w-5 h-5" /></button>
             <div className="group relative cursor-pointer flex items-center gap-3">
@@ -407,10 +476,31 @@ export default function PautaSessao() {
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900">Construtor de Pauta</h2>
               </div>
-              <div className="flex gap-2">
-                <button onClick={iniciarImpressao} className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold py-2 px-4 rounded-lg shadow-sm flex items-center gap-2"><Printer className="w-4 h-4" /> Imprimir</button>
-                <button onClick={enviarParaPlenario} disabled={enviando} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm flex items-center gap-2 disabled:opacity-50"><Send className="w-4 h-4" /> {enviando ? "A enviar..." : "Enviar Pauta"}</button>
-              </div>
+              <div className="flex flex-wrap gap-2">
+  <button
+    onClick={iniciarImpressao}
+    className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold py-2 px-4 rounded-lg shadow-sm flex items-center gap-2"
+  >
+    <Printer className="w-4 h-4" /> Imprimir
+  </button>
+
+  {/* NOVO BOTÃO: Fluxo direto para Ata (para clientes sem módulo de Sessão ao vivo) */}
+  <button
+    onClick={irParaLancamentoAta}
+    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm flex items-center gap-2"
+  >
+    <FileText className="w-4 h-4" /> Lançar Resultados p/ Ata
+  </button>
+
+  {/* BOTÃO EXISTENTE: Fluxo para Sessão de Plenário */}
+  <button
+    onClick={enviarParaPlenario}
+    disabled={enviando}
+    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm flex items-center gap-2 disabled:opacity-50"
+  >
+    <Send className="w-4 h-4" /> {enviando ? "A enviar..." : "Enviar p/ Plenário"}
+  </button>
+</div>
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
@@ -437,6 +527,15 @@ export default function PautaSessao() {
                     <h3 className="font-bold text-gray-800">Documentos Disponíveis</h3>
                     <button onClick={adicionarTodosFiltrados} className="text-xs font-semibold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">Add Todos</button>
                   </div>
+                  
+                  {/* NOVO BLOCO: Filtro de Data Integrado UI Antiga */}
+                  <div className="flex items-center gap-2 mb-3 bg-gray-50 p-2.5 rounded-lg border border-gray-200">
+                    <Calendar className="w-4 h-4 text-gray-400" />
+                    <input type="date" value={dataFiltroInicio} onChange={e => setDataFiltroInicio(e.target.value)} className="flex-1 bg-transparent text-xs outline-none text-gray-600 font-medium" />
+                    <span className="text-xs text-gray-400">até</span>
+                    <input type="date" value={dataFiltroFim} onChange={e => setDataFiltroFim(e.target.value)} className="flex-1 bg-transparent text-xs outline-none text-gray-600 font-medium" />
+                  </div>
+
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -460,14 +559,18 @@ export default function PautaSessao() {
                   ) : (
                     documentosFiltradosBiblioteca.map(doc => {
                       const naPauta = itensPauta.some(p => p.id === doc.id);
+                      const badgeFase = getFaseBadge(doc);
                       return (
                         <div key={doc.id} className={`p-3 rounded-lg border ${naPauta ? 'bg-white border-gray-200 opacity-60' : 'bg-white border-gray-200 shadow-sm hover:border-blue-300'}`}>
-                          <div className="flex justify-between items-start mb-1">
-                            <span className="text-[10px] font-bold text-gray-500 uppercase">{doc.type.replace('_', ' ')} Nº {doc.protocolNum}/{doc.year}</span>
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex flex-col items-start gap-1">
+                              <span className="text-[10px] font-bold text-gray-500 uppercase">{doc.type.replace('_', ' ')} Nº {doc.protocolNum}/{doc.year}</span>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${badgeFase.color}`}>{badgeFase.text}</span>
+                            </div>
                             {naPauta ? (
-                              <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">Na Pauta</span>
+                              <span className="text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded mt-1">Na Pauta</span>
                             ) : (
-                              <button onClick={() => adicionarItemDaBiblioteca(doc)} className="text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded flex items-center gap-1">
+                              <button onClick={() => adicionarItemDaBiblioteca(doc)} className="text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded flex items-center gap-1 mt-1">
                                 <Plus className="w-3 h-3" /> Add
                               </button>
                             )}

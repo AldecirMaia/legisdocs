@@ -1,17 +1,19 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient, DocumentType, DocumentStatus } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { DocumentType, DocumentStatus } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service'; // Ajuste o caminho se necessário
 
 @Injectable()
 export class DocumentService {
   
+  // 1. CORREÇÃO DE ARQUITETURA: Injetar o PrismaService em vez de usar "new PrismaClient()"
+  constructor(private readonly prisma: PrismaService) {}
+
   async create(data: {
     type: DocumentType;
     status: DocumentStatus;
     ementa: string;
     content?: string;
-    texto?: string; // NOVO CAMPO: Artigos da Lei adicionado à tipagem
+    texto?: string;
     motivo?: string;
     secretariaDestino?: string;
     nomeSecretario?: string;
@@ -22,7 +24,7 @@ export class DocumentService {
   }) {
     const currentYear = new Date().getFullYear();
 
-    return await prisma.$transaction(async (tx) => {
+    return await this.prisma.$transaction(async (tx) => {
       const allDocs = await tx.document.findMany({
         where: { 
           tenantId: data.tenantId, 
@@ -58,7 +60,7 @@ export class DocumentService {
           status: finalStatus, 
           ementa: data.ementa,
           content: data.content || '', 
-          texto: data.texto || null, // NOVO CAMPO: Guardado na base de dados
+          texto: data.texto || null,
           motivo: data.motivo,
           secretariaDestino: data.secretariaDestino,
           nomeSecretario: data.nomeSecretario,
@@ -66,6 +68,7 @@ export class DocumentService {
           tenantId: data.tenantId,
           gabineteId: data.gabineteId,
           authorId: data.authorId,
+          // faseAtual assumirá "NOVO" automaticamente através do @default no Prisma
         },
       });
     });
@@ -81,7 +84,7 @@ export class DocumentService {
   }) {
     const currentYear = new Date().getFullYear();
 
-    return await prisma.$transaction(async (tx) => {
+    return await this.prisma.$transaction(async (tx) => {
       const allDocs = await tx.document.findMany({
         where: { tenantId: data.tenantId, year: currentYear, type: data.type, protocolNum: { gt: 0 } },
         select: { protocolNum: true },
@@ -114,7 +117,7 @@ export class DocumentService {
   }
 
   async findByGabinete(gabineteId: string) {
-    return await prisma.document.findMany({
+    return await this.prisma.document.findMany({
       where: { gabineteId },
       orderBy: { createdAt: 'desc' }, 
       include: { author: { select: { name: true, partido: true } } }
@@ -122,7 +125,7 @@ export class DocumentService {
   }
 
   async findFilaAnalise(tenantId: string) {
-    return await prisma.document.findMany({
+    return await this.prisma.document.findMany({
       where: { tenantId, status: 'ENVIADO' },
       orderBy: { createdAt: 'asc' }, 
       include: { 
@@ -132,11 +135,16 @@ export class DocumentService {
     });
   }
 
+  // 2. CORREÇÃO DA ESTEIRA: O método que alimenta o painel de Pauta
   async findAprovados(tenantId: string) {
-    return await prisma.document.findMany({
+    return await this.prisma.document.findMany({
       where: { 
         tenantId, 
-        status: 'APROVADO' 
+        status: 'APROVADO',
+        // ESCONDE os documentos que já terminaram o fluxo na câmara
+        faseAtual: {
+          notIn: ['APROVADO_FINAL', 'ARQUIVADO', 'LEI_SANCIONADA']
+        }
       },
       orderBy: [
         { type: 'asc' },
@@ -144,13 +152,19 @@ export class DocumentService {
       ],
       include: { 
         author: { select: { name: true, partido: true } },
-        gabinete: { select: { name: true } }
+        gabinete: { 
+          // Retornamos os usuários do gabinete para o frontend conseguir achar o VEREADOR autor
+          select: { 
+            name: true,
+            users: { select: { name: true, role: true } }
+          } 
+        }
       }
     });
   }
 
   async findOne(id: string) {
-    return await prisma.document.findUnique({
+    return await this.prisma.document.findUnique({
       where: { id },
       include: {
         author: { select: { name: true, role: true, partido: true } },
@@ -177,19 +191,19 @@ export class DocumentService {
        updateData.protocolNum = -Math.floor(Date.now() / 1000) - Math.floor(Math.random() * 1000);
     }
 
-    return await prisma.document.update({
+    return await this.prisma.document.update({
       where: { id },
       data: updateData,
     });
   }
 
   async updateDocument(id: string, data: any) {
-    return await prisma.document.update({
+    return await this.prisma.document.update({
       where: { id },
       data: {
         ementa: data.ementa,
         motivo: data.motivo,
-        texto: data.texto, // NOVO CAMPO: Atualizado na edição do documento
+        texto: data.texto,
         justificativa: data.justificativa,
         secretariaDestino: data.secretariaDestino,
         nomeSecretario: data.nomeSecretario,
@@ -199,7 +213,7 @@ export class DocumentService {
   }
 
   async findAprovadosSecretaria(tenantId: string) {
-    return await prisma.document.findMany({
+    return await this.prisma.document.findMany({
       where: {
         tenantId,
         status: 'APROVADO',

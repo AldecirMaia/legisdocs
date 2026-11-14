@@ -15,11 +15,13 @@ export class TenantService {
     return await prisma.tenant.update({
       where: { id },
       data: {
+        estadoNome: data.estadoNome,
         prefeitoNome: data.prefeitoNome,
         palacioNome: data.palacioNome,
         salaSessoesNome: data.salaSessoesNome,
         cidadeEstado: data.cidadeEstado,
         artigoIndicacao: data.artigoIndicacao,
+        artigoProjetoLei: data.artigoProjetoLei,
         logoCabecalho: data.logoCabecalho,
         marcaDagua: data.marcaDagua,
         enderecoRodape: data.enderecoRodape,

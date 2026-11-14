@@ -22,11 +22,11 @@ export default function ConfiguracoesCamara() {
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Estados do Formulário (NOVO CAMPO: estadoNome)
+  // Estados do Formulário
   const [form, setForm] = useState({
     estadoNome: "", cidadeEstado: "", 
     prefeitoNome: "", palacioNome: "", salaSessoesNome: "", 
-    artigoIndicacao: "",
+    artigoIndicacao: "", artigoProjetoLei: "",
     logoCabecalho: "", marcaDagua: "",
     enderecoRodape: "", contatoRodape: "", 
   });
@@ -45,12 +45,13 @@ export default function ConfiguracoesCamara() {
       if (!res.ok) throw new Error("Erro ao carregar configurações");
       const data = await res.json();
       setForm({
-        estadoNome: data.estadoNome || "", // Carrega o novo campo
+        estadoNome: data.estadoNome || "",
         cidadeEstado: data.cidadeEstado || "",
         prefeitoNome: data.prefeitoNome || "",
         palacioNome: data.palacioNome || "",
         salaSessoesNome: data.salaSessoesNome || "",
         artigoIndicacao: data.artigoIndicacao || "",
+        artigoProjetoLei: data.artigoProjetoLei || "",
         logoCabecalho: data.logoCabecalho || "",
         marcaDagua: data.marcaDagua || "",
         enderecoRodape: data.enderecoRodape || "", 
@@ -245,11 +246,11 @@ export default function ConfiguracoesCamara() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-xs font-bold text-gray-700 mb-1">Estado (Cabeçalho)</label>
-                          <input type="text" value={form.estadoNome} onChange={(e) => setForm({ ...form, estadoNome: e.target.value })} className="w-full border border-gray-300 bg-gray-50 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Estado do Ceará" />
+                          <input type="text" value={form.estadoNome} onChange={(e) => setForm({ ...form, estadoNome: e.target.value })} className="w-full border border-gray-300 bg-gray-50 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Estado do Rio Grande do Norte" />
                         </div>
                         <div>
                           <label className="block text-xs font-bold text-gray-700 mb-1">Cidade</label>
-                          <input type="text" value={form.cidadeEstado} onChange={(e) => setForm({ ...form, cidadeEstado: e.target.value })} className="w-full border border-gray-300 bg-gray-50 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Jaguaruana - CE" />
+                          <input type="text" value={form.cidadeEstado} onChange={(e) => setForm({ ...form, cidadeEstado: e.target.value })} className="w-full border border-gray-300 bg-gray-50 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Baraúna - RN" />
                         </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -259,7 +260,7 @@ export default function ConfiguracoesCamara() {
                         </div>
                         <div>
                           <label className="block text-xs font-bold text-gray-700 mb-1">Sala das Sessões (Legislativo)</label>
-                          <input type="text" value={form.salaSessoesNome} onChange={(e) => setForm({ ...form, salaSessoesNome: e.target.value })} className="w-full border border-gray-300 bg-gray-50 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Ver. João da Silva" />
+                          <input type="text" value={form.salaSessoesNome} onChange={(e) => setForm({ ...form, salaSessoesNome: e.target.value })} className="w-full border border-gray-300 bg-gray-50 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Vereador José Fernandes de Queiroz" />
                         </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -271,6 +272,16 @@ export default function ConfiguracoesCamara() {
                           <label className="block text-xs font-bold text-gray-700 mb-1">Artigo do Regimento (Indicações)</label>
                           <input type="text" value={form.artigoIndicacao} onChange={(e) => setForm({ ...form, artigoIndicacao: e.target.value })} className="w-full border border-gray-300 bg-gray-50 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: art. 152" />
                         </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1">Fundamentação Legal (Projetos de Lei)</label>
+                        <input
+                          type="text"
+                          value={form.artigoProjetoLei}
+                          onChange={(e) => setForm({ ...form, artigoProjetoLei: e.target.value })}
+                          className="w-full border border-gray-300 bg-gray-50 rounded-lg p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Ex: art. 14, I, da LOM (Lei Orgânica Municipal) c/c art. 52, IV e art. 97, II"
+                        />
                       </div>
                     </div>
                   </div>
@@ -383,7 +394,7 @@ export default function ConfiguracoesCamara() {
                           <div className="h-12 w-12 bg-gray-200 rounded-full mb-3 flex items-center justify-center text-gray-400 text-xs">Logo</div>
                         )}
                         <p className="text-[10px] text-gray-600 tracking-widest uppercase font-semibold text-center leading-tight">
-                          <Var valor={form.estadoNome} placeholder="ESTADO (EX: ESTADO DO CEARÁ)" />
+                          <Var valor={form.estadoNome} placeholder="ESTADO (EX: ESTADO DO RN)" />
                         </p>
                         <h1 className="text-[13px] font-black uppercase text-gray-900 text-center leading-tight">
                           Câmara Municipal de <Var valor={form.cidadeEstado?.split('-')[0]?.trim()} placeholder="Cidade" />
@@ -403,10 +414,11 @@ export default function ConfiguracoesCamara() {
                             <p className="mb-8 indent-8">
                               A medida atende a reiteradas solicitações dos moradores, que convivem com lama no período chuvoso e poeira no verão.
                             </p>
-                            <p className="text-center mt-auto mb-16">
-                              Sala das Sessões <Var valor={form.salaSessoesNome} placeholder="Sala" />, Palácio <Var valor={form.palacioNome} placeholder="Palácio" />.<br/>
-                              <Var valor={form.cidadeEstado} placeholder="Cidade-UF" />, {new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}.
-                            </p>
+                            <div className="text-center mt-auto mb-10">
+                              <p>Sala das Sessões <Var valor={form.salaSessoesNome} placeholder="Sala" />,</p>
+                              <p>Palácio <Var valor={form.palacioNome} placeholder="Palácio" />,</p>
+                              <p><Var valor={form.cidadeEstado?.split('-')[0]?.trim()} placeholder="Cidade" />, {new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}.</p>
+                            </div>
                           </>
                         )}
 
@@ -417,39 +429,35 @@ export default function ConfiguracoesCamara() {
                             <p className="mb-4 indent-8">
                               Requeiro à Mesa Diretora, ouvido o soberano Plenário, que seja enviado ofício à Excelentíssima Prefeita Municipal, senhora <Var valor={form.prefeitoNome} placeholder="Prefeito" />, solicitando informações detalhadas sobre a licitação de medicamentos.
                             </p>
-                            <p className="text-center mt-auto mb-16 pt-10">
-                              Sala das Sessões <Var valor={form.salaSessoesNome} placeholder="Sala" />, Palácio <Var valor={form.palacioNome} placeholder="Palácio" />.<br/>
-                              <Var valor={form.cidadeEstado} placeholder="Cidade-UF" />, {new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}.
-                            </p>
+                            <div className="text-center mt-auto mb-10 pt-8">
+                              <p>Sala das Sessões <Var valor={form.salaSessoesNome} placeholder="Sala" />,</p>
+                              <p>Palácio <Var valor={form.palacioNome} placeholder="Palácio" />,</p>
+                              <p><Var valor={form.cidadeEstado?.split('-')[0]?.trim()} placeholder="Cidade" />, {new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}.</p>
+                            </div>
                           </>
                         )}
 
                         {modeloPrevia === "PROJETO_LEI" && (
                           <>
-                            <p className="text-center font-bold mb-6 text-[12px]">PROJETO DE LEI Nº 012/2026</p>
+                            <p className="text-left font-bold mb-5 text-[12px]">PROJETO LEI LEGISLATIVO Nº 001/2026</p>
                             <div className="flex justify-end mb-6">
-                              <p className="w-1/2 text-[10px] text-justify italic">
-                                Súmula: Institui a política municipal de incentivo à leitura nas escolas e dá outras providências.
+                              <p className="w-[58%] text-[10px] text-justify">
+                                Dispõe sobre a política municipal de incentivo à leitura nas escolas e dá outras providências.
                               </p>
                             </div>
-                            <p className="mb-4 font-bold">
-                              A Câmara Municipal de <Var valor={form.cidadeEstado?.split('-')[0]?.trim()} placeholder="Cidade" /> aprova:
+                            <p className="mb-8 indent-6 text-[10.5px] leading-relaxed">
+                              Eu, <strong>Nome do Vereador</strong>, Vereador(a), apresento nos termos do <Var valor={form.artigoProjetoLei} placeholder="art. 14, I, da LOM c/c art. 52, IV e art. 97, II" />, ambos do Regimento Interno desta Casa, proposição de projeto de lei que dispõe sobre a política municipal de incentivo à leitura nas escolas e dá outras providências.
                             </p>
-                            <p className="mb-2 text-justify">
-                              <strong>Art. 1º.</strong> Fica instituída a política municipal de incentivo à leitura na rede de ensino.
-                            </p>
-                            <p className="mb-2 text-justify">
-                              <strong>Art. 2º.</strong> O poder executivo municipal regulamentará esta lei no prazo de 60 dias.
-                            </p>
-                            <p className="text-center mt-12 mb-16">
-                              Palácio <Var valor={form.palacioNome} placeholder="Palácio" />.<br/>
-                              <Var valor={form.cidadeEstado} placeholder="Cidade-UF" />, {new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}.
-                            </p>
+                            <div className="text-center mt-8 mb-10">
+                              <p>Sala das Sessões <Var valor={form.salaSessoesNome} placeholder="Sala" />,</p>
+                              <p>Palácio <Var valor={form.palacioNome} placeholder="Palácio" />,</p>
+                              <p><Var valor={form.cidadeEstado?.split('-')[0]?.trim()} placeholder="Cidade" />, {new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}.</p>
+                            </div>
                           </>
                         )}
 
                         {/* ASSINATURA FICTÍCIA */}
-                        <div className="flex flex-col items-center justify-center mt-8">
+                        <div className="flex flex-col items-center justify-center mt-6">
                           <div className="w-40 border-t border-gray-800 mb-1"></div>
                           <p className="font-bold text-[10px]">NOME DO VEREADOR</p>
                           <p className="text-[9px] text-gray-600">Vereador(a) - PARTIDO</p>

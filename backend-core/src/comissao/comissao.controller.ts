@@ -33,7 +33,10 @@ export class ComissaoController {
   atualizar(@Param('id') id: string, @Body() data: any) {
     return this.comissaoService.atualizarComissao(id, data);
   }
-
+@Delete('tramitacao/:id')
+  excluirTramitacao(@Param('id') id: string) {
+    return this.comissaoService.excluirTramitacao(id);
+  }
   @Delete(':id')
   excluir(@Param('id') id: string) {
     return this.comissaoService.excluirComissao(id);
