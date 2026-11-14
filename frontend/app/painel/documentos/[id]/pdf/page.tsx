@@ -70,7 +70,9 @@ export default function DocumentoPdfPage({ params }: { params: Promise<{ id: str
         const token = localStorage.getItem("legisdocs_token");
         const parsedUser = storedUser ? JSON.parse(storedUser) : null;
         const apiEnv = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const headers: Record<string, string> = token
+  ? { Authorization: `Bearer ${token}` }
+  : {};
 
         const resDoc = await fetch(`${apiEnv}/document/detalhe/${docId}`, { headers });
         if (resDoc.ok) {
